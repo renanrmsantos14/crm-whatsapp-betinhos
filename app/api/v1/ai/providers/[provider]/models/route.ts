@@ -41,17 +41,47 @@ export async function GET(
   }
 
   const supabase = await createClient();
-  const { data, error } = await supabase
+  const [{ data, error }, { data: credentials }] = await Promise.all([
+    supabase
     .from("ai_models")
     .select(MODEL_COLUMNS)
     .eq("provider", provider)
     .is("deprecated_at", null)
     .order("is_default_for_provider", { ascending: false })
-    .order("input_price_per_million_cents", { ascending: true });
+    .order("input_price_per_million_cents", { ascending: true }),
+    supabase
+      .from("ai_provider_credentials_safe")
+      .select("models_available")
+      .eq("organization_id", activeOrg.orgId)
+      .eq("provider", provider)
+      .eq("is_active", true),
+  ]);
 
   if (error) {
     return fail("internal_error", "Erro ao listar modelos.", 500, { requestId });
   }
 
-  return ok({ models: data ?? [] }, { requestId });
+  const catalogModels = data ?? [];
+  const known = new Set(catalogModels.map((model) => model.model_id));
+  const discoveredModels = (credentials ?? []).flatMap((credential) =>
+    (credential.models_available ?? [])
+      .filter((modelId): modelId is string => typeof modelId === "string" && modelId.length > 0)
+      .filter((modelId) => !known.has(modelId))
+      .map((modelId) => ({
+        id: `credential-${provider}-${modelId}`,
+        provider,
+        model_id: modelId,
+        display_name: modelId,
+        description: null,
+        context_window: null,
+        input_price_per_million_cents: null,
+        output_price_per_million_cents: null,
+        supports_tools: true,
+        is_default_for_provider: false,
+        deprecated_at: null,
+        released_at: null,
+      })),
+  );
+
+  return ok({ models: [...catalogModels, ...discoveredModels] }, { requestId });
 }

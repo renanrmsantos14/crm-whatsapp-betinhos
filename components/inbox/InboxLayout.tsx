@@ -10,6 +10,7 @@ import { useCloseConversation } from "@/hooks/inbox/useCloseConversation";
 import { useMarkAsRead } from "@/hooks/inbox/useMarkAsRead";
 import {
   useConversationsRealtime,
+  type ConversationsInitialData,
   type ConversationsFilters,
   type ConversationWithContact,
 } from "@/hooks/inbox/useConversationsRealtime";
@@ -108,9 +109,13 @@ function parseFilterParam(v: string | null): InboxTab {
 
 interface InboxLayoutProps {
   initialSelectedId?: string | null;
+  initialConversations?: ConversationsInitialData;
 }
 
-export function InboxLayout({ initialSelectedId = null }: InboxLayoutProps = {}) {
+export function InboxLayout({
+  initialSelectedId = null,
+  initialConversations,
+}: InboxLayoutProps = {}) {
   const t = useT();
   const { activeOrg, user } = useAuth();
   const supportReadonly = user.support?.access_mode === "support_readonly";
@@ -180,7 +185,16 @@ export function InboxLayout({ initialSelectedId = null }: InboxLayoutProps = {})
 
   // We need the selected conversation object for header / composer / side panel.
   // Source it from the same query the list uses to avoid an extra request.
-  const listQ = useConversationsRealtime(filters, orgId);
+  const listQ = useConversationsRealtime(filters, orgId, {
+    initialData:
+      initialConversations &&
+      tab === "unassigned" &&
+      !filterValue.search &&
+      !filterValue.channel_session_id &&
+      !filterValue.tag
+        ? initialConversations
+        : undefined,
+  });
   const inList = useMemo(() => {
     const all = listQ.data?.pages.flatMap((p) => p.data) ?? [];
     return all.find((c) => c.id === selectedId) ?? null;

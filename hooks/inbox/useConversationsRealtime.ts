@@ -92,14 +92,17 @@ export interface ConversationsFilters {
   tag?: string;
 }
 
-interface ListResponse {
+export interface ListResponse {
   data: ConversationWithContact[];
   meta?: { cursor?: string | null; has_more?: boolean };
 }
 
+export type ConversationsInitialData = ListResponse;
+
 export function useConversationsRealtime(
   filters: ConversationsFilters,
   orgId: string | null,
+  options?: { initialData?: ConversationsInitialData },
 ) {
   const qc = useQueryClient();
   const queryKey = ["conversations", filters] as const;
@@ -107,6 +110,14 @@ export function useConversationsRealtime(
   const query = useInfiniteQuery({
     queryKey,
     initialPageParam: undefined as string | undefined,
+    ...(options?.initialData
+      ? {
+          initialData: {
+            pages: [options.initialData],
+            pageParams: [undefined as string | undefined],
+          },
+        }
+      : {}),
     queryFn: async ({ pageParam }) => {
       const qs = new URLSearchParams();
       // Lista vira `open,pending`; valor único continua saindo como antes.

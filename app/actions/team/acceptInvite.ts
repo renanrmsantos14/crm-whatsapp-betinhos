@@ -53,7 +53,7 @@ export async function acceptInviteAction(token: string): Promise<AcceptInviteRes
 
   // Org/papel/convidador vêm exclusivamente do token assinado; usuário do JWT.
   const { data: result, error } = await createAdminClient().rpc("fn_accept_team_invite", {
-    p_interface_settings: payload.interface_settings ?? { preset: "completa" },
+    p_interface_settings: payload.interface_settings ?? { preset: "simplificada" },
     p_user: user.id,
     p_org: payload.organization_id,
     p_role: payload.role,

@@ -15,9 +15,22 @@ const granular = { preset: "completa", destinos: ["/app/products"] } as const;
 const hrefs = (settings: unknown, role: "agent" | "admin" = "admin", platform = false) =>
   destinosDaInterface(settings, platform, role).map((d) => d.href);
 describe("interface por vínculo é apresentação", () => {
-  it("legado completa acompanha catálogo e não duplica IDs", () => {
-    expect(hrefs(null)).toEqual(NAV_CATALOG.map((d) => d.href));
+  it("o padrão Betinhos começa simplificado e não duplica IDs", () => {
+    expect(hrefs(null)).toEqual(hrefs(simplified));
     expect(new Set(NAV_CATALOG.map((d) => d.href)).size).toBe(NAV_CATALOG.length);
+  });
+  it("mantém extras fora da navegação inicial sem apagar as rotas", () => {
+    const visiveis = hrefs(null);
+    expect(visiveis).not.toContain("/app/ai/agents");
+    expect(visiveis).not.toContain("/app/integrations/nuvemshop");
+    expect(visiveis).not.toContain("/app/metrics");
+    expect(NAV_CATALOG.map((d) => d.href)).toEqual(
+      expect.arrayContaining([
+        "/app/ai/agents",
+        "/app/integrations/nuvemshop",
+        "/app/metrics",
+      ]),
+    );
   });
   it("simplificada tem operação e Conexões somente quando papel permite", () => {
     expect(hrefs(simplified)).toContain("/app/connections");
@@ -87,6 +100,6 @@ describe("interface por vínculo é apresentação", () => {
     ).toEqual(simplified);
     expect(
       lerInterface(verifyInviteToken(signInviteToken(payload))?.interface_settings).settings,
-    ).toEqual(complete);
+    ).toEqual(simplified);
   });
 });

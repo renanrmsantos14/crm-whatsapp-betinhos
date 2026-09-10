@@ -18895,7 +18895,8 @@ grant execute on function public.fn_support_callback_write_allowed(uuid,uuid,uui
 -- ---- Interface por vínculo (0221) ----
 -- Apresentação por membership, nunca autorização. IDs evoluem no catálogo TS.
 -- Default segura para clones; nenhuma linha legada é reinterpretada como bloqueio.
-alter table public.user_organizations add column if not exists interface_settings jsonb not null default '{"preset":"completa"}'::jsonb;
+alter table public.user_organizations add column if not exists interface_settings jsonb not null default '{"preset":"simplificada"}'::jsonb;
+alter table public.user_organizations alter column interface_settings set default '{"preset":"simplificada"}'::jsonb;
 do $$ begin
  if not exists(select 1 from pg_constraint where conrelid='public.user_organizations'::regclass and conname='user_organizations_interface_shape') then
   alter table public.user_organizations add constraint user_organizations_interface_shape check (
@@ -18951,7 +18952,7 @@ create or replace function public.fn_accept_team_invite(
  p_user uuid, p_org uuid, p_role text, p_invited_by uuid,
  p_issued_at timestamptz, p_invited_at timestamptz
 ) returns jsonb language sql security definer set search_path = public, pg_temp as $$
- select public.fn_accept_team_invite(p_user,p_org,p_role,p_invited_by,p_issued_at,p_invited_at,'{"preset":"completa"}'::jsonb);
+ select public.fn_accept_team_invite(p_user,p_org,p_role,p_invited_by,p_issued_at,p_invited_at,'{"preset":"simplificada"}'::jsonb);
 $$;
 revoke all on function public.fn_accept_team_invite(uuid,uuid,text,uuid,timestamptz,timestamptz) from public,anon,authenticated;
 grant execute on function public.fn_accept_team_invite(uuid,uuid,text,uuid,timestamptz,timestamptz) to service_role;
@@ -18990,8 +18991,8 @@ begin
   insert into public.user_organizations(organization_id, user_id, role, accepted_at, interface_settings)
     values (org.id, p_actor, 'admin', now(), case when lower(p_request->>'owner_email') =
       (select lower(email) from auth.users where id = p_actor)
-      then coalesce(p_request->'owner_interface_settings', '{"preset":"completa"}'::jsonb)
-      else '{"preset":"completa"}'::jsonb end);
+       then coalesce(p_request->'owner_interface_settings', '{"preset":"simplificada"}'::jsonb)
+       else '{"preset":"simplificada"}'::jsonb end);
   result := jsonb_build_object('id', org.id, 'slug', org.slug, 'display_name', org.display_name,
     'invite_id', gen_random_uuid(), 'issued_at', floor(extract(epoch from now()))::bigint);
   insert into public.idempotency_keys(organization_id, key, endpoint, request_hash, status_code, response_body, tenant_creation_trusted)

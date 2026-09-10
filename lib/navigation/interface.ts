@@ -17,6 +17,8 @@ export const interfaceSettingsSchema = z
   .strict();
 export type InterfaceSettings = z.infer<typeof interfaceSettingsSchema>;
 export const INTERFACE_COMPLETA: InterfaceSettings = { preset: "completa" };
+/** Perfil inicial do CRM Betinhos: operação diária primeiro, extras por código. */
+export const INTERFACE_PADRAO_DO_PRODUTO: InterfaceSettings = { preset: "simplificada" };
 const SIMPLIFICADA: readonly NavDestinationId[] = [
   "/app/inbox",
   "/app/agenda",
@@ -54,7 +56,7 @@ export function lerInterface(raw: unknown): {
   settings: InterfaceSettings;
   needsAdjustment: boolean;
 } {
-  if (raw == null) return { settings: INTERFACE_COMPLETA, needsAdjustment: false };
+  if (raw == null) return { settings: INTERFACE_PADRAO_DO_PRODUTO, needsAdjustment: false };
   if (typeof raw !== "object") return { settings: INTERFACE_COMPLETA, needsAdjustment: true };
   const value = raw as Record<string, unknown>;
   const destinos = Array.isArray(value.destinos)

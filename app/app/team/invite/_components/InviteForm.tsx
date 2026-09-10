@@ -1,7 +1,7 @@
 "use client";
 import { InterfaceEditor } from "@/components/team/InterfaceEditor";
 import {
-  INTERFACE_COMPLETA,
+  INTERFACE_PADRAO_DO_PRODUTO,
   interfaceSettingsSchema,
   interfaceTemDestino,
 } from "@/lib/navigation/interface";
@@ -31,7 +31,7 @@ interface ResultState {
 export function InviteForm() {
   const t = useT();
   const [emailsRaw, setEmailsRaw] = useState("");
-  const [settings, setSettings] = useState(INTERFACE_COMPLETA);
+  const [settings, setSettings] = useState(INTERFACE_PADRAO_DO_PRODUTO);
   const [role, setRole] = useState<Role>("agent");
   const [result, setResult] = useState<ResultState | null>(null);
   const invite = useInviteMembers();

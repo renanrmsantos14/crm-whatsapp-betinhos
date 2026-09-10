@@ -8,6 +8,7 @@ import {
   searchable,
   sidebarGroups,
 } from "@/lib/navigation/registry";
+import { INTERFACE_COMPLETA } from "@/lib/navigation/interface";
 
 /**
  * O registro é a fonte única da navegação. Estes testes cobrem as projeções
@@ -82,7 +83,9 @@ describe("sidebarGroups", () => {
   });
 
   it("só inclui destino marcado como sidebar", () => {
-    const hrefs = sidebarGroups(true, null).flatMap((g) => g.items.map((i) => i.href));
+    const hrefs = sidebarGroups(true, null, INTERFACE_COMPLETA).flatMap((g) =>
+      g.items.map((i) => i.href),
+    );
     // Conhecimento existe no registro, mas é do hub — não do sidebar.
     expect(hrefs).not.toContain("/app/ai/knowledge/sources");
     expect(hrefs).toContain("/app/ai/agents");
@@ -99,7 +102,9 @@ describe("sidebarGroups", () => {
     // O que NÃO pode voltar é o destino trocar de grupo: é isso que a primeira
     // asserção prende, e ela não depende de onde o item é desenhado.
     expect(dest("/app/settings/tenant/pipelines").group).toBe("crm");
-    const hub = hubSections("crm", true, null).flatMap((s) => s.items.map((i) => i.href));
+    const hub = hubSections("crm", true, null, INTERFACE_COMPLETA).flatMap((s) =>
+      s.items.map((i) => i.href),
+    );
     expect(hub).toContain("/app/settings/tenant/pipelines");
   });
 
@@ -111,7 +116,7 @@ describe("sidebarGroups", () => {
     //
     // A lista é EXATA de propósito. `toContain` deixaria um sexto item entrar
     // calado no sidebar e reabrir a mesma corrida por pixel.
-    const crm = sidebarGroups(true, null).find((g) => g.group.id === "crm");
+    const crm = sidebarGroups(true, null, INTERFACE_COMPLETA).find((g) => g.group.id === "crm");
     expect(crm?.items.map((i) => i.href)).toEqual([
       "/app/kanban",
       "/app/contacts",
@@ -132,7 +137,7 @@ describe("sidebarGroups", () => {
     // sidebar estourou a dobra em 900px (e2e `navegacao.spec.ts`). Elas seguem
     // o padrão das outras nove telas do grupo — alcançáveis pelo hub "Ver tudo
     // em IA", que é o desenho existente para tela de configuração.
-    const ia = sidebarGroups(true, null).find((g) => g.group.id === "ia");
+    const ia = sidebarGroups(true, null, INTERFACE_COMPLETA).find((g) => g.group.id === "ia");
     expect(ia?.items.map((i) => i.href)).toEqual([
       "/app/ai/agents",
       "/app/ai/followups",
@@ -146,7 +151,7 @@ describe("hubSections", () => {
     // As seções são a régua do sidebar escrita por extenso — o que se abre todo
     // dia contra o que se define uma vez. Lista EXATA: `toContain` deixaria uma
     // tela nova entrar sem que ninguém decidisse de que lado dela ela cai.
-    const secoes = hubSections("crm", true, null);
+    const secoes = hubSections("crm", true, null, INTERFACE_COMPLETA);
     expect(secoes.map((s) => s.section)).toEqual(["O dia a dia da venda", "Preparar a venda"]);
     expect(secoes.flatMap((s) => s.items.map((i) => i.href))).toEqual([
       "/app/kanban",
@@ -158,12 +163,14 @@ describe("hubSections", () => {
   });
 
   it("agrupa a IA nas três etapas da jornada, na ordem", () => {
-    const secoes = hubSections("ia", true, null).map((s) => s.section);
+    const secoes = hubSections("ia", true, null, INTERFACE_COMPLETA).map((s) => s.section);
     expect(secoes).toEqual(["Montar o agente", "Ensinar o agente", "Acompanhar o agente"]);
   });
 
   it("o hub mostra também o que já está no sidebar — é inventário, não sobra", () => {
-    const hrefs = hubSections("ia", true, null).flatMap((s) => s.items.map((i) => i.href));
+    const hrefs = hubSections("ia", true, null, INTERFACE_COMPLETA).flatMap((s) =>
+      s.items.map((i) => i.href),
+    );
     expect(hrefs).toContain("/app/ai/agents");
     expect(hrefs).toContain("/app/ai/knowledge/sources");
   });
@@ -184,7 +191,7 @@ describe("hubSections", () => {
 
 describe("searchable", () => {
   it("expõe todo destino visível, do sidebar ou não", () => {
-    const hrefs = searchable(ADMIN.platform, ADMIN.role).map((d) => d.href);
+    const hrefs = searchable(ADMIN.platform, ADMIN.role, INTERFACE_COMPLETA).map((d) => d.href);
     expect(hrefs).toContain("/app/ai/knowledge/sources");
     expect(hrefs).toContain("/app/inbox");
   });

@@ -37,7 +37,7 @@ describe("interface por vínculo no banco aplicado", () => {
   it("assinaturas antiga/nova permanecem service-only e coluna tem default", () => prove(`
     do $$ begin
      if has_function_privilege('authenticated','public.fn_accept_team_invite(uuid,uuid,text,uuid,timestamptz,timestamptz,jsonb)','execute') or has_function_privilege('anon','public.fn_accept_team_invite(uuid,uuid,text,uuid,timestamptz,timestamptz,jsonb)','execute') then raise exception 'exposed'; end if;
-     if (select interface_settings from public.user_organizations where organization_id='${a}' and user_id='${admin}') <> '{"preset":"completa"}'::jsonb then raise exception 'default'; end if;
+     if (select interface_settings from public.user_organizations where organization_id='${a}' and user_id='${admin}') <> '{"preset":"simplificada"}'::jsonb then raise exception 'default'; end if;
     end $$;`));
   it("criação do próprio responsável aplica interface sem alterar confiança do recibo", () => prove(`
     insert into public.platform_admins(user_id,granted_by,scope,mfa_required,reason) values ('${admin}','${admin}','full',false,'Local fixture');

@@ -7,6 +7,7 @@
  */
 import { z } from "zod";
 import { describeWahaServer, type WahaServerCapabilities } from "@/lib/channels/waha-server";
+import { wahaPayloadSchema, type WahaPayload } from "@/lib/waha/envelope";
 
 import { logger } from "@/lib/logger";
 import { classificarFalhaDeAlcance, explicarFalhaDeAlcance } from "@/lib/net/alcance";
@@ -196,6 +197,43 @@ export class WahaClient {
       }
       throw e;
     }
+  }
+
+  /**
+   * Lê o histórico do NOWEB em páginas. `chatId=all` é suportado pelo WAHA e
+   * evita uma consulta por conversa; o cursor por offset torna a reconciliação
+   * segura mesmo quando o computador ficou desligado por várias horas.
+   */
+  async getMessages(
+    session: string,
+    fromTimestampSeconds: number,
+    toTimestampSeconds: number,
+  ): Promise<WahaPayload[]> {
+    const limit = 100;
+    const mensagens: WahaPayload[] = [];
+
+    for (let offset = 0; offset < 10_000; offset += limit) {
+      const query = new URLSearchParams({
+        session,
+        chatId: "all",
+        limit: String(limit),
+        offset: String(offset),
+        "filter.timestamp.gte": String(Math.floor(fromTimestampSeconds)),
+        "filter.timestamp.lte": String(Math.floor(toTimestampSeconds)),
+        downloadMedia: "true",
+      });
+      const res = await this.fetchComTeto(`${this.baseUrl}/api/messages?${query.toString()}`, {
+        headers: { "X-Api-Key": this.apiKey },
+      }, TETO_DE_MIDIA_MS);
+      if (!res.ok) throw new Error(`waha_messages_${res.status}`);
+
+      const parsed = z.array(wahaPayloadSchema).safeParse(await res.json().catch(() => null));
+      if (!parsed.success) throw new Error("waha_messages_invalid_response");
+      mensagens.push(...parsed.data);
+      if (parsed.data.length < limit) break;
+    }
+
+    return mensagens;
   }
 
   /** server/version é diagnóstico, nunca uma licença inventada pelo cliente. */

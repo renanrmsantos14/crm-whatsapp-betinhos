@@ -563,6 +563,7 @@ async function handleInbound(
   session: Session,
   p: WahaPayload,
   requestId: string,
+  historical = false,
 ): Promise<void> {
   const chatId = p.from ?? "";
   const parsed = parseChatId(chatId);
@@ -622,7 +623,7 @@ async function handleInbound(
       sent_via: "external_device",
       sent_at: p.timestamp ? new Date(p.timestamp * 1000).toISOString() : now,
       delivered_at: now,
-      metadata: { raw_type: p.type, ack_name: p.ackName },
+      metadata: { raw_type: p.type, ack_name: p.ackName, ...(historical ? { historical_sync: true } : {}) },
     })
     .select("id")
     .maybeSingle();
@@ -651,7 +652,7 @@ async function handleInbound(
     // `aplicarEfeitosPosEntrada` — a reentrega cai aqui. Reacelerar só o
     // pipeline (sem re-despachar o agente) destrava o match_reply.
     const existente = await mensagemIngeridaPorExternalId(admin, session.organization_id, p.id);
-    if (existente) {
+    if (existente && !historical) {
       try {
         await acelerarPipelineDeEventos(admin, {
           organizationId: session.organization_id,
@@ -691,6 +692,8 @@ async function handleInbound(
   // `lib/channels/pos-entrada.ts`, junto com o motivo de cada posição. O
   // comportamento aqui é o MESMO de antes, campo a campo — o que mudou é quem o
   // executa.
+  if (historical) return;
+
   await aplicarEfeitosPosEntrada(admin, {
     organizationId: session.organization_id,
     contactId,
@@ -752,6 +755,7 @@ async function handleOutboundFromUserPhone(
   session: Session,
   p: WahaPayload,
   requestId: string,
+  historical = false,
 ): Promise<void> {
   // De onde sai o chat, em ordem de confiança:
   //   1. `to`  — o WEBJS manda; é o destinatário explícito.
@@ -849,7 +853,7 @@ async function handleOutboundFromUserPhone(
       media_mime: mediaMimeOf(p),
       sent_via: "external_device",
       sent_at: p.timestamp ? new Date(p.timestamp * 1000).toISOString() : now,
-      metadata: { raw_type: p.type, fromMe: true },
+      metadata: { raw_type: p.type, fromMe: true, ...(historical ? { historical_sync: true } : {}) },
     })
     .select("id")
     .maybeSingle();
@@ -896,7 +900,7 @@ async function handleOutboundFromUserPhone(
   //   silenciar o bot -> ESTRITO    (na dúvida NÃO cala; calar a IA por engano é
   //                                  pior que não calar)
   // Quem reaproveitar esta condição para pular o INSERT reabre o #108.
-  if (!(await ehEcoDeEnvioNosso(admin, session.organization_id, conversationId, p))) {
+  if (!historical && !(await ehEcoDeEnvioNosso(admin, session.organization_id, conversationId, p))) {
     await pausarIaPorAtendimentoManual(admin, {
       organizationId: session.organization_id,
       conversationId,
@@ -1067,15 +1071,16 @@ export async function dispatchWahaEvent(
   session: SessionStatusRow,
   envelope: WahaEnvelope,
   requestId: string,
+  options: { historical?: boolean } = {},
 ): Promise<void> {
   const eventType = envelope.event ?? "unknown";
   const payload: WahaPayload = envelope.payload ?? {};
 
   if (eventType === "message" || eventType === "message.any") {
     if (payload.fromMe) {
-      await handleOutboundFromUserPhone(admin, session, payload, requestId);
+      await handleOutboundFromUserPhone(admin, session, payload, requestId, options.historical === true);
     } else {
-      await handleInbound(admin, session, payload, requestId);
+      await handleInbound(admin, session, payload, requestId, options.historical === true);
     }
   } else if (eventType === "message.ack") {
     await handleAck(admin, session, payload);

@@ -79,6 +79,9 @@ export function getRegisteredHandlers(): readonly EventHandler[] {
  * decide how to update `consumed_by` / `status` / `attempts`.
  */
 export async function dispatchEvent(row: EventRow): Promise<HandlerResult[]> {
+  // Mensagens recuperadas do histórico servem para recompor a tela, não para
+  // reexecutar automações, follow-ups, notificações ou IA fora de hora.
+  if (row.payload?.historical_sync === true) return [];
   const matches = _handlers.filter(
     (h) => h.events.includes(row.event_type) && !row.consumed_by.includes(h.key),
   );

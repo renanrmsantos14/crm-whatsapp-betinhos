@@ -552,12 +552,10 @@ export async function sendMessageHandler(
     if (existing.error) throw new Error("inline_message_identity_mismatch");
     created = existing.data;
     insErr = null;
-    if (
-      ["sent", "delivered", "read", "failed"].includes(
-        String((created as unknown as Message).status),
-      )
-    )
-      return created as unknown as Message;
+    // A retry do cliente pode chegar enquanto a primeira chamada ainda fala
+    // com o provedor. Devolver a linha existente é obrigatório também para
+    // queued/sending: continuar daqui chamaria o WAHA uma segunda vez.
+    return created as unknown as Message;
   }
   if (insErr || !created) {
     throw new ApiError(

@@ -4,6 +4,7 @@ import { requireSupportWrite } from "@/lib/impersonate/support";
  */
 import { randomUUID } from "node:crypto";
 import { type NextRequest } from "next/server";
+import { z } from "zod";
 
 import { ApiError } from "@/lib/api/types";
 import { fail, ok } from "@/lib/api/wrappers";
@@ -21,6 +22,10 @@ export async function POST(req: NextRequest): Promise<Response> {
 
   const requestId = randomUUID();
   const supabase = await createClient();
+  const idempotencyKey = req.headers.get("Idempotency-Key");
+  if (idempotencyKey && !z.string().uuid().safeParse(idempotencyKey).success) {
+    return fail("validation_error", "Idempotency-Key deve ser UUID", 400, { requestId });
+  }
 
   // spec 13 §4: escrita é agent+ (viewer é read-only).
   const authz = await requireRole("agent", { requestId, resource: "messages" });
@@ -49,6 +54,7 @@ export async function POST(req: NextRequest): Promise<Response> {
         actor: { type: "user", id: user.id },
         requestId,
         idioma: user.idioma,
+        ...(idempotencyKey ? { internalMessageId: idempotencyKey } : {}),
       },
       input as SendMessageInput,
     );

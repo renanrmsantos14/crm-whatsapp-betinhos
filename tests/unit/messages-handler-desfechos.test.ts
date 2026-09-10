@@ -90,7 +90,7 @@ function makeSupabase(
   conversation: Row,
   templateRow: Row | null = null,
   /** `semColunaArquivada`: banco em que a migration 0106 ainda não rodou. */
-  opts: { semColunaArquivada?: boolean; channelMetadata?: Row } = {},
+  opts: { semColunaArquivada?: boolean; channelMetadata?: Row; existingMessage?: Row } = {},
 ) {
   const state: { message: Row | null } = { message: null };
 
@@ -141,7 +141,17 @@ function makeSupabase(
       }
       if (table === 'messages') {
         return {
+          select: () => {
+            const query = {
+              eq: () => query,
+              single: async () => ({ data: opts.existingMessage ?? null, error: opts.existingMessage ? null : { message: 'not found' } }),
+            };
+            return query;
+          },
           insert: (row: Row) => {
+            if (opts.existingMessage) {
+              return { select: () => ({ single: async () => ({ data: null, error: { code: '23505', message: 'duplicate key' } }) }) };
+            }
             state.message = {
               id: 'msg-1',
               external_id: null,
@@ -204,6 +214,29 @@ afterEach(() => {
 });
 
 describe('sendMessageHandler — os 6 desfechos do envio', () => {
+  it('retry concorrente com a mesma chave devolve a linha existente sem reenviar', async () => {
+    wahaConfigured(true);
+    const fetchMock = vi.fn(async (..._args: unknown[]) => Response.json({ id: { _serialized: 'WA1' } }));
+    vi.stubGlobal('fetch', fetchMock);
+    const existing = {
+      id: 'same-message',
+      organization_id: ORG,
+      conversation_id: CONV,
+      status: 'queued',
+      external_id: null,
+      body: 'oi',
+      metadata: {},
+    };
+
+    const message = await sendMessageHandler(
+      makeSupabase(conversationRow(), null, { existingMessage: existing }),
+      { ...ctx, internalMessageId: '66666666-6666-4666-8666-666666666666' },
+      textInput(),
+    );
+
+    expect(message).toMatchObject({ id: 'same-message', status: 'queued' });
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
   it("revalida a lista no sink, inclusive para automação, sem transformar teste em opt-out", async () => {
     wahaConfigured(true);
     const fetchMock = vi.fn();

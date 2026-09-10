@@ -107,6 +107,14 @@ export async function POST(req: NextRequest): Promise<Response> {
         { requestId },
       );
     }
+    if (guardado.motivo === "cifragem") {
+      return fail(
+        "configuration_error",
+        t("A instalação não consegue criptografar credenciais. Configure AI_CRED_AES_KEY com 32 bytes em base64 e reinicie o servidor."),
+        503,
+        { requestId },
+      );
+    }
     return fail("internal_error", "Erro ao criar credential.", 500, { requestId });
   }
 

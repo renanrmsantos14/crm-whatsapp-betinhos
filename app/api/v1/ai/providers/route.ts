@@ -114,7 +114,29 @@ export async function GET(): Promise<Response> {
       doCatalogo: m.supports_vision,
     }),
   }));
-  const capacidadePorModelo = new Map(modelos.map((m) => [`${m.provider}|${m.model_id}`, m]));
+  // BYOK pode descobrir modelos de provedores que ainda não têm catálogo global
+  // (ex.: DeepSeek). O painel precisa enxergar esses modelos depois da validação
+  // da credencial, sem exigir um cron específico para cada provedor.
+  const modelosDaCredencial = (credsRes.data ?? []).flatMap((cred) =>
+    (cred.models_available ?? []).map((modelId: string) => ({
+      provider: cred.provider,
+      model_id: modelId,
+      display_name: modelId,
+      supports_tools: true,
+      supports_vision: false,
+      is_default_for_provider: false,
+      deprecated: false,
+      pricing_input_per_million: null,
+      pricing_output_per_million: null,
+    })),
+  );
+  const modelosComCredenciais = [
+    ...modelos,
+    ...modelosDaCredencial.filter(
+      (extra) => !modelos.some((m) => m.provider === extra.provider && m.model_id === extra.model_id),
+    ),
+  ];
+  const capacidadePorModelo = new Map(modelosComCredenciais.map((m) => [`${m.provider}|${m.model_id}`, m]));
 
   const pontos = PONTOS_DE_IA.map((ponto) => {
     const decisao = decidirBinding({
@@ -189,7 +211,7 @@ export async function GET(): Promise<Response> {
     pontos,
     provedores: PROVEDORES,
     credenciais: credsRes.data ?? [],
-    modelos,
+    modelos: modelosComCredenciais,
     podeEditar: roleAtLeast(org.role, "admin"),
   });
 }

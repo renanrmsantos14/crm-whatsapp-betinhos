@@ -128,14 +128,32 @@ export async function publishFirstVersion(
     .eq("provider", provider)
     .is("deprecated_at", null);
 
+  // Provedores sem catálogo global (como DeepSeek) descobrem os modelos na
+  // validação da credencial. Eles também precisam ser aceitos na publicação.
+  const { data: credenciais } = await admin
+    .from("ai_provider_credentials_safe")
+    .select("id, models_available")
+    .eq("organization_id", orgId)
+    .eq("provider", provider)
+    .eq("is_active", true);
+  const idsDescobertos = (credenciais ?? [])
+    .filter((c) => !selection?.credentialId || c.id === selection.credentialId)
+    .flatMap((c) => c.models_available ?? []);
+  const modelosComCredencial = [
+    ...(modelos ?? []),
+    ...idsDescobertos
+      .filter((modelId) => !(modelos ?? []).some((m) => m.model_id === modelId))
+      .map((model_id) => ({ model_id, supports_tools: true, is_default_for_provider: false })),
+  ];
+
   const escolha = escolherModeloDoProvedor(
-    (modelos ?? []) as Parameters<typeof escolherModeloDoProvedor>[0],
+    modelosComCredencial as Parameters<typeof escolherModeloDoProvedor>[0],
   );
   if (!escolha.escolhido) {
     return { published: false, reason: "no_model", provider, motivo: escolha.motivo };
   }
   const modelId = selection?.model ?? escolha.modelId;
-  if (selection && !(modelos ?? []).some((m) => m.model_id === modelId && m.supports_tools))
+  if (selection && !modelosComCredencial.some((m) => m.model_id === modelId && m.supports_tools))
     return { published: false, reason: "failed", message: "model_not_found" };
 
   // "Em que negócios ele pode mexer". Toda organização nasce com um funil de

@@ -30,6 +30,8 @@ describe("reserva WAHA preserva pré-go-live da main", () => {
     await pool.query("insert into user_organizations(organization_id,user_id,role,accepted_at) values($1,$2,'admin',now())",[org,actor]);
     const first=await reserve(org,key,onboarding);
     expect(first.channel.organization_id).toBe(org);
+    expect(first.channel.waha_session_name).toHaveLength(45);
+    expect(first.channel.waha_session_name.length).toBeLessThanOrEqual(54);
     expect(first.channel.metadata).toEqual({...metadataInicialDoCanal(),...(onboarding?{onboarding:true}:{})});
     await pool.query("select fn_finish_channel_connection($1,$2,$3,'FAILED','connection_repair_required')",[org,first.receipt_id,first.lease_token]);
     // Mudança explícita do operador não pode ser desfeita por retry de conexão.
@@ -44,5 +46,20 @@ describe("reserva WAHA preserva pré-go-live da main", () => {
     expect(retry.channel.waha_session_name).toBe(first.channel.waha_session_name);
     expect(retry.lease_token).not.toBe(first.lease_token);
     expect(retry.channel.metadata).toEqual(before);
+  });
+
+  it("retry cura nome legado longo somente quando o remoto nunca foi criado", async () => {
+    const org=randomUUID(),key=randomUUID();
+    await pool.query("insert into organizations(id,slug,legal_name,display_name) values($1,$2,'Reserva','Reserva')",[org,org]);
+    await pool.query("insert into user_organizations(organization_id,user_id,role,accepted_at) values($1,$2,'admin',now())",[org,actor]);
+    const first=await reserve(org,key,false);
+    const legado=`org_${org.replaceAll("-","")}_${randomUUID().replaceAll("-","")}`;
+    expect(legado).toHaveLength(69);
+    await pool.query("update channel_sessions set waha_session_name=$1,status='FAILED' where organization_id=$2 and id=$3",[legado,org,first.channel.id]);
+    await pool.query("select fn_finish_channel_connection($1,$2,$3,'FAILED','connection_repair_required')",[org,first.receipt_id,first.lease_token]);
+    const retry=await reserve(org,key,false);
+    expect(retry.channel.id).toBe(first.channel.id);
+    expect(retry.channel.waha_session_name).not.toBe(legado);
+    expect(retry.channel.waha_session_name).toHaveLength(45);
   });
 });

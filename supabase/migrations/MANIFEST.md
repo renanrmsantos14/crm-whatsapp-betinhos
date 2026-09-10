@@ -287,3 +287,4 @@ To re-apply on a fresh Supabase project, replay the migrations in version order 
 | `20260907060000` | `0230_reserva_pre_go_live` | A reserva transacional de novos canais WAHA preserva o pré-go-live da plataforma; retry mantém política e identidade existentes. Forward-fix da integração, sem alterar 0228 aplicada. |
 
 | `20260910010000` | `0232_padrao_de_interface_betinhos` | Novas memberships e tenants começam no perfil simplificado de operação; escolhas explícitas de interface são preservadas. |
+| `20260910123500` | `0233_nome_sessao_waha_compativel` | Reserva WAHA respeita o limite de 54 caracteres e cura retries FAILED cujo remoto nunca foi criado. Forward-fix de 0230. |

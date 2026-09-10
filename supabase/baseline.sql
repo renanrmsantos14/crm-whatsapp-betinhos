@@ -23143,7 +23143,7 @@ end;$$;
 
 notify pgrst,'reload schema';
 
--- ---- Reserva WAHA preserva pré-go-live (migration 0230) ----
+-- ---- Reserva WAHA preserva pré-go-live (migrations 0230, 0233) ----
 -- 0230 — reserva WAHA cria canais em pré-go-live como os demais providers.
 -- Forward-only: 0228 já aplicada. A única mudança funcional é metadata no INSERT
 -- de canal novo; retry/replay/reconexão preservam integralmente a política atual.
@@ -23171,6 +23171,14 @@ begin
    raise exception 'connection_in_progress' using errcode='55P03';end if;
   select * into channel from public.channel_sessions where organization_id=p_org and id=receipt.channel_session_id for update;
   if not found then raise exception 'connection_reservation_missing' using errcode='P0002';end if;
+  -- 0233: o WAHA 2026.7.2 aceita no máximo 54 caracteres. A identidade de 69
+  -- caracteres nunca chegou a ser criada remotamente quando o recibo diz false.
+  if length(channel.waha_session_name)>54 and channel.status='FAILED' and not receipt.remote_created then
+   update public.channel_sessions
+      set waha_session_name='org_'||left(p_org::text,8)||'_'||replace(gen_random_uuid()::text,'-','')
+    where organization_id=p_org and id=channel.id
+    returning * into channel;
+  end if;
  else
   if p_onboarding then
    select * into channel from public.channel_sessions where organization_id=p_org and provider='waha'
@@ -23180,7 +23188,7 @@ begin
   if channel.id is null then
    insert into public.channel_sessions(organization_id,waha_session_name,display_name,engine,webhook_path_token,
      webhook_secret_encrypted,status,last_status_change_at,consecutive_health_fails,daily_message_limit,metadata)
-   values(p_org,'org_'||replace(p_org::text,'-','')||'_'||replace(gen_random_uuid()::text,'-',''),p_display_name,'NOWEB',
+   values(p_org,'org_'||left(p_org::text,8)||'_'||replace(gen_random_uuid()::text,'-',''),p_display_name,'NOWEB',
      replace(gen_random_uuid()::text,'-',''),'\x00'::bytea,'STARTING',now(),0,250,
      '{"ai_gate":"allowlist","ai_gate_mode":"pre_go_live","ai_test_phone_numbers":[]}'::jsonb
      || case when p_onboarding then '{"onboarding":true}'::jsonb else '{}'::jsonb end) returning * into channel;

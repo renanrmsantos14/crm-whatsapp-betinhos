@@ -8,6 +8,7 @@ import { lerInterface } from "@/lib/navigation/interface";
  * and then filter by `user_id` (a trusted source).
  */
 import { readSupportContext } from "@/lib/impersonate/support";
+import { cache } from "react";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { logger } from "@/lib/logger";
@@ -268,6 +269,19 @@ export async function loadAuthUser(): Promise<AuthUser | null> {
 }
 
 /**
+ * Deduplica a leitura de sessão dentro da mesma renderização RSC.
+ *
+ * O layout autenticado e páginas como a Inbox precisam da mesma identidade,
+ * mas são nós diferentes da árvore. Em uma navegação isso não deve disparar
+ * dois `getUser()` nem duas leituras de permissões. A função pública original
+ * permanece sem cache para Server Actions, route handlers e testes que precisam
+ * controlar cada leitura explicitamente.
+ */
+export const loadAuthUserForRender = cache(async (): Promise<AuthUser | null> => {
+  return loadAuthUser();
+});
+
+/**
  * Resolves the active organization for the current request.
  * Priority: cookie `active_org` (if member of) → first membership.
  * Returns null if user has zero memberships.
@@ -297,7 +311,7 @@ export async function resolveActiveOrg(authUser: AuthUser): Promise<ActiveOrg | 
  * an authenticated user. Redirects to /login if not.
  */
 export async function requireAuth(): Promise<AuthUser> {
-  const user = await loadAuthUser();
+  const user = await loadAuthUserForRender();
   if (!user) redirect("/login");
   return user;
 }

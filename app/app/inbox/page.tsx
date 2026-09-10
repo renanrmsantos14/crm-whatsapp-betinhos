@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import Link from "next/link";
-import { loadAuthUser, resolveActiveOrg } from "@/lib/auth/server";
+import { loadAuthUserForRender, resolveActiveOrg } from "@/lib/auth/server";
 import { InboxLayout } from "@/components/inbox/InboxLayout";
 import { traduzir } from "@/lib/i18n/dicionario";
 
@@ -11,7 +11,7 @@ export default async function InboxPage({
 }: {
   searchParams: Promise<{ id?: string }>;
 }) {
-  const user = await loadAuthUser();
+  const user = await loadAuthUserForRender();
   if (!user) redirect("/login");
   const activeOrg = await resolveActiveOrg(user);
   if (!activeOrg) {

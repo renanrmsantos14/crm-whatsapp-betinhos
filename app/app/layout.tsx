@@ -1,7 +1,7 @@
 import { InterfaceRefresh } from "@/hooks/auth/InterfaceRefresh";
 import { redirect } from "next/navigation";
 import { cookies } from "next/headers";
-import { isMfaEnrolled, loadAuthUser, requiresMfa, resolveActiveOrg } from "@/lib/auth/server";
+import { isMfaEnrolled, loadAuthUserForRender, requiresMfa, resolveActiveOrg } from "@/lib/auth/server";
 import { DEFAULT_VISIBILITY_MODE, type VisibilityMode } from "@/lib/auth/types";
 import { AuthProvider } from "@/hooks/auth/AuthProvider";
 import { AppShell } from "./_components/AppShell";
@@ -20,7 +20,7 @@ import { IdiomaProvider } from "@/lib/i18n/IdiomaProvider";
 import { listarConexoesCaidas, type ConexaoCaida } from "@/lib/channels/health";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
-  const user = await loadAuthUser();
+  const user = await loadAuthUserForRender();
   if (!user) redirect("/login");
 
   let activeOrg = await resolveActiveOrg(user);

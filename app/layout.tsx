@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Atkinson_Hyperlegible, IBM_Plex_Mono } from "next/font/google";
 import { headers } from "next/headers";
+import { cache } from "react";
 import { Toaster } from "sonner";
 import { coresDaBarraDoNavegador } from "@/lib/branding/barra-do-navegador";
 import { MarcaDaInstalacaoProvider } from "@/lib/branding/contexto";
@@ -51,24 +52,26 @@ const plexMono = IBM_Plex_Mono({
  * A leitura do banco é memoizada em `lib/branding/instalacao.ts`, então as três
  * chamadas por requisição custam UMA consulta a cada TTL.
  */
-async function marcaResolvida(): Promise<{
-  /** A linha crua — só `EstiloDaMarca` precisa dela, para gravar o estado. */
-  readonly linha: LinhaDaMarca | null;
-  readonly marca: MarcaResolvida;
-}> {
-  // Login, cadastro e confirmação de e-mail não precisam consultar o banco
-  // para descobrir a marca. Além de ser desnecessário, esse acesso remoto no
-  // layout global segurava o primeiro HTML quando o Supabase estava lento ou
-  // temporariamente indisponível. Nessas rotas o `.env` já é a camada de
-  // fallback válida; telas autenticadas continuam lendo `platform_branding`.
-  const pathname = (await headers()).get("x-pathname");
-  const linha = pathname && isPublicPath(pathname) ? null : await marcaDaInstalacao();
-  const marca = resolverMarca(
-    [camadaDaInstalacao(linha), camadaDoAmbiente(env)],
-    REGUA_DO_PRODUTO,
-  );
-  return { linha, marca };
-}
+const marcaResolvida = cache(
+  async (): Promise<{
+    /** A linha crua — só `EstiloDaMarca` precisa dela, para gravar o estado. */
+    readonly linha: LinhaDaMarca | null;
+    readonly marca: MarcaResolvida;
+  }> => {
+    // Login, cadastro e confirmação de e-mail não precisam consultar o banco
+    // para descobrir a marca. Além de ser desnecessário, esse acesso remoto no
+    // layout global segurava o primeiro HTML quando o Supabase estava lento ou
+    // temporariamente indisponível. Nessas rotas o `.env` já é a camada de
+    // fallback válida; telas autenticadas continuam lendo `platform_branding`.
+    const pathname = (await headers()).get("x-pathname");
+    const linha = pathname && isPublicPath(pathname) ? null : await marcaDaInstalacao();
+    const marca = resolverMarca(
+      [camadaDaInstalacao(linha), camadaDoAmbiente(env)],
+      REGUA_DO_PRODUTO,
+    );
+    return { linha, marca };
+  },
+);
 
 /**
  * Metadata dinâmica (não `export const metadata`) para a marca ser lida em RUNTIME.
@@ -96,14 +99,7 @@ export async function generateMetadata(): Promise<Metadata> {
       "Centralize o atendimento por WhatsApp num funil só. Agentes de IA resolvem o que dá pra resolver e passam para o time humano o que importa — com tudo registrado. Multi-tenant, LGPD-nativo, feito para operações brasileiras.",
     applicationName: name,
     authors: [{ name }],
-    keywords: [
-      "CRM",
-      "atendimento",
-      "WhatsApp",
-      "IA conversacional",
-      "LGPD",
-      "multi-tenant",
-    ],
+    keywords: ["CRM", "atendimento", "WhatsApp", "IA conversacional", "LGPD", "multi-tenant"],
     robots: { index: false, follow: false },
     // Sem esta linha o navegador pede `/favicon.ico`, que não existe: medido em
     // produção, o 404 é a `app/not-found.tsx` INTEIRA (19.435 bytes de HTML)
@@ -169,13 +165,9 @@ const motivosRegistrados = new Set<string>();
  * bloco inteiro, não a frase que se veio consertar.
  */
 async function EstiloDaMarca() {
-  // `await headers()` força render dinâmico, pelo mesmo motivo do
-  // `<PublicEnvScript/>`: numa imagem pré-buildada, um render ESTÁTICO
-  // congelaria o valor lido durante o `next build` — que é vazio — e a cor do
-  // revendedor nunca apareceria. Hoje o layout já é dinâmico por causa do
-  // vizinho; declarar aqui torna a garantia local, em vez de depender de um
-  // componente que alguém pode mover.
-  await headers();
+  // `marcaResolvida()` lê `headers()` e força o render dinâmico: numa imagem
+  // pré-buildada, um render ESTÁTICO congelaria o valor lido durante o
+  // `next build` — que é vazio — e a cor do revendedor nunca apareceria.
   const { linha, marca } = await marcaResolvida();
   const { css, motivos } = cssDaMarca(marca.cor);
 
@@ -277,9 +269,7 @@ async function MarcaDosClientComponents({ children }: { children: React.ReactNod
   );
 }
 
-export default function RootLayout({
-  children,
-}: Readonly<{ children: React.ReactNode }>) {
+export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html
       lang="pt-BR"
@@ -300,12 +290,7 @@ export default function RootLayout({
           <MarcaDosClientComponents>
             <ThemeProvider>{children}</ThemeProvider>
           </MarcaDosClientComponents>
-          <Toaster
-            position="top-right"
-            richColors
-            closeButton
-            duration={4000}
-          />
+          <Toaster position="top-right" richColors closeButton duration={4000} />
         </Providers>
       </body>
     </html>

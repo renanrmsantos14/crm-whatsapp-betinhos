@@ -3,13 +3,14 @@
  * edge/llm/) onde SDK de vendor é importado. Instância POR CHAMADA com a chave
  * BYOK da org: sem pool global de chave, sem fallback silencioso.
  */
-import { createAnthropic } from '@ai-sdk/anthropic';
-import { createGoogleGenerativeAI } from '@ai-sdk/google';
-import { createOpenAI } from '@ai-sdk/openai';
-import type { LanguageModel } from 'ai';
-import { MockLanguageModelV3 } from 'ai/test';
+import { createAnthropic } from "@ai-sdk/anthropic";
+import { createGoogleGenerativeAI } from "@ai-sdk/google";
+import { createOpenAI } from "@ai-sdk/openai";
+import type { LanguageModel } from "ai";
+import { MockLanguageModelV3 } from "ai/test";
 
-import { allowlistedFetch, buildAllowlist } from '../egress';
+import { canonicalizeDeepSeekModel, withDeepSeekThinkingDisabled } from "@/lib/ai/deepseek";
+import { allowlistedFetch, buildAllowlist } from "../egress";
 
 /**
  * provider name → (chave BYOK da org, id do modelo, endpoint opcional) → modelo
@@ -33,16 +34,16 @@ export type ProviderRegistry = Record<
  * de ter escolhido o provider anthropic. Se uma org precisar de proxy/baseURL custom, é aqui
  * que ele entra (junto do `fetch` contido), nunca espalhado.
  */
-const ANTHROPIC_ENDPOINT = 'https://api.anthropic.com';
-const OPENAI_ENDPOINT = 'https://api.openai.com';
-const GOOGLE_ENDPOINT = 'https://generativelanguage.googleapis.com';
-const DEEPSEEK_ENDPOINT = 'https://api.deepseek.com';
+const ANTHROPIC_ENDPOINT = "https://api.anthropic.com";
+const OPENAI_ENDPOINT = "https://api.openai.com";
+const GOOGLE_ENDPOINT = "https://generativelanguage.googleapis.com";
+const DEEPSEEK_ENDPOINT = "https://api.deepseek.com";
 /**
  * A OpenRouter fala a API da OpenAI, então o provider `@ai-sdk/openai` conversa
  * com ela sem dependência nova — e os ids dela já vêm no formato
  * `familia/modelo`, o mesmo dos nossos, sem tradução no meio.
  */
-export const OPENROUTER_ENDPOINT = 'https://openrouter.ai/api/v1';
+export const OPENROUTER_ENDPOINT = "https://openrouter.ai/api/v1";
 
 /**
  * Cabeçalhos OPCIONAIS de atribuição da OpenRouter.
@@ -65,8 +66,8 @@ export function cabecalhosDeAtribuicaoOpenRouter(): Record<string, string> | und
   const url = process.env.OPENROUTER_APP_URL?.trim();
   const titulo = process.env.OPENROUTER_APP_TITLE?.trim();
   const headers: Record<string, string> = {};
-  if (url) headers['HTTP-Referer'] = url;
-  if (titulo) headers['X-Title'] = titulo;
+  if (url) headers["HTTP-Referer"] = url;
+  if (titulo) headers["X-Title"] = titulo;
   return Object.keys(headers).length > 0 ? headers : undefined;
 }
 
@@ -86,20 +87,23 @@ export function createDefaultRegistry(opts?: { allowedHosts?: string[] }): Provi
   const contain = (endpoint: string): typeof fetch => {
     const allow = buildAllowlist([endpoint, ...extra]);
     return (input, init) => {
-      const url = typeof input === 'string' || input instanceof URL ? input : input.url;
+      const url = typeof input === "string" || input instanceof URL ? input : input.url;
       return allowlistedFetch(url, init, { allowlist: allow });
     };
   };
   return {
     anthropic: (apiKey, modelId) =>
       createAnthropic({ apiKey, fetch: contain(ANTHROPIC_ENDPOINT) })(modelId),
-    openai: (apiKey, modelId) =>
-      createOpenAI({ apiKey, fetch: contain(OPENAI_ENDPOINT) })(modelId),
+    openai: (apiKey, modelId) => createOpenAI({ apiKey, fetch: contain(OPENAI_ENDPOINT) })(modelId),
     google: (apiKey, modelId) =>
       createGoogleGenerativeAI({ apiKey, fetch: contain(GOOGLE_ENDPOINT) })(modelId),
     deepseek: (apiKey, modelId, baseUrl) => {
       const endpoint = baseUrl ?? DEEPSEEK_ENDPOINT;
-      return createOpenAI({ apiKey, baseURL: endpoint, fetch: contain(endpoint) })(modelId);
+      return createOpenAI({
+        apiKey,
+        baseURL: endpoint,
+        fetch: withDeepSeekThinkingDisabled(contain(endpoint)),
+      })(canonicalizeDeepSeekModel(modelId));
     },
     /**
      * O `baseUrl` do painel é honrado aqui, e a allowlist do egress passa a ser
@@ -126,7 +130,9 @@ export function createDefaultRegistry(opts?: { allowedHosts?: string[] }): Provi
  * O doGenerate default devolve `text` com usage fixo; injete o seu para cenários
  * de tool-call/erro.
  */
-type MockDoGenerate = NonNullable<ConstructorParameters<typeof MockLanguageModelV3>[0]>['doGenerate'];
+type MockDoGenerate = NonNullable<
+  ConstructorParameters<typeof MockLanguageModelV3>[0]
+>["doGenerate"];
 
 export function createFakeRegistry(
   doGenerate?: MockDoGenerate,
@@ -135,17 +141,15 @@ export function createFakeRegistry(
   const factory = (_apiKey: string, modelId: string): LanguageModel =>
     new MockLanguageModelV3({
       modelId,
-      doGenerate:
-        doGenerate ??
-        {
-          content: [{ type: 'text', text: opts?.text ?? 'ok' }],
-          finishReason: { unified: 'stop' as const, raw: undefined },
-          usage: {
-            inputTokens: { total: 1, noCache: 1, cacheRead: 0, cacheWrite: 0 },
-            outputTokens: { total: 1, text: 1, reasoning: 0 },
-          },
-          warnings: [],
+      doGenerate: doGenerate ?? {
+        content: [{ type: "text", text: opts?.text ?? "ok" }],
+        finishReason: { unified: "stop" as const, raw: undefined },
+        usage: {
+          inputTokens: { total: 1, noCache: 1, cacheRead: 0, cacheWrite: 0 },
+          outputTokens: { total: 1, text: 1, reasoning: 0 },
         },
+        warnings: [],
+      },
     });
   return { anthropic: factory, fake: factory };
 }

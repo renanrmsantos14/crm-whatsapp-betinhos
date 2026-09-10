@@ -8,6 +8,11 @@ import { randomUUID } from "node:crypto";
 import { type NextRequest } from "next/server";
 
 import { ok, fail } from "@/lib/api/wrappers";
+import {
+  DEEPSEEK_FLASH_DISPLAY_NAME,
+  DEEPSEEK_FLASH_MODEL,
+  normalizeDeepSeekModels,
+} from "@/lib/ai/deepseek";
 import { loadAuthUser, resolveActiveOrg } from "@/lib/auth/server";
 import { createClient } from "@/lib/supabase/server";
 import { ehProvedorSuportado } from "@/lib/ai/pontos/provedores";
@@ -43,12 +48,12 @@ export async function GET(
   const supabase = await createClient();
   const [{ data, error }, { data: credentials }] = await Promise.all([
     supabase
-    .from("ai_models")
-    .select(MODEL_COLUMNS)
-    .eq("provider", provider)
-    .is("deprecated_at", null)
-    .order("is_default_for_provider", { ascending: false })
-    .order("input_price_per_million_cents", { ascending: true }),
+      .from("ai_models")
+      .select(MODEL_COLUMNS)
+      .eq("provider", provider)
+      .is("deprecated_at", null)
+      .order("is_default_for_provider", { ascending: false })
+      .order("input_price_per_million_cents", { ascending: true }),
     supabase
       .from("ai_provider_credentials_safe")
       .select("models_available")
@@ -61,27 +66,42 @@ export async function GET(
     return fail("internal_error", "Erro ao listar modelos.", 500, { requestId });
   }
 
-  const catalogModels = data ?? [];
-  const known = new Set(catalogModels.map((model) => model.model_id));
-  const discoveredModels = (credentials ?? []).flatMap((credential) =>
-    (credential.models_available ?? [])
-      .filter((modelId): modelId is string => typeof modelId === "string" && modelId.length > 0)
-      .filter((modelId) => !known.has(modelId))
-      .map((modelId) => ({
-        id: `credential-${provider}-${modelId}`,
-        provider,
-        model_id: modelId,
-        display_name: modelId,
-        description: null,
-        context_window: null,
-        input_price_per_million_cents: null,
-        output_price_per_million_cents: null,
-        supports_tools: true,
-        is_default_for_provider: false,
-        deprecated_at: null,
-        released_at: null,
-      })),
+  const catalogModels = (data ?? []).map((model) =>
+    provider === "deepseek" && model.model_id === DEEPSEEK_FLASH_MODEL
+      ? { ...model, display_name: DEEPSEEK_FLASH_DISPLAY_NAME }
+      : model,
   );
+  const known = new Set(catalogModels.map((model) => model.model_id));
+  const discoveredRaw = (credentials ?? []).flatMap(
+    (credential) => credential.models_available ?? [],
+  );
+  const discoveredIds =
+    provider === "deepseek"
+      ? normalizeDeepSeekModels([
+          ...discoveredRaw,
+          ...(discoveredRaw.length > 0 ? [DEEPSEEK_FLASH_MODEL] : []),
+        ])
+      : discoveredRaw;
+  const discoveredModels = discoveredIds
+    .filter((modelId): modelId is string => typeof modelId === "string" && modelId.length > 0)
+    .filter((modelId) => !known.has(modelId))
+    .map((modelId) => ({
+      id: `credential-${provider}-${modelId}`,
+      provider,
+      model_id: modelId,
+      display_name:
+        provider === "deepseek" && modelId === DEEPSEEK_FLASH_MODEL
+          ? DEEPSEEK_FLASH_DISPLAY_NAME
+          : modelId,
+      description: null,
+      context_window: null,
+      input_price_per_million_cents: null,
+      output_price_per_million_cents: null,
+      supports_tools: true,
+      is_default_for_provider: false,
+      deprecated_at: null,
+      released_at: null,
+    }));
 
   return ok({ models: [...catalogModels, ...discoveredModels] }, { requestId });
 }

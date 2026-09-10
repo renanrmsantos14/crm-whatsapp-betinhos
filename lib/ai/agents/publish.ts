@@ -6,6 +6,7 @@
  * with a stable error code, and unknown errors to 500.
  */
 import { chaveDePlataforma } from "@/lib/ai/runtime/agent";
+import { canonicalizeDeepSeekModel, normalizeDeepSeekModels } from "@/lib/ai/deepseek";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { PUBLISH_ERROR_CODES, type PublishErrorCode } from "./validation";
 
@@ -34,7 +35,12 @@ interface PublishRow {
 
 export async function publishAgentVersion(
   admin: SupabaseClient,
-  params: { orgId: string; agentId: string; versionId: string; expectedProvenance?: "onboarding" | "legacy_reconciliation" },
+  params: {
+    orgId: string;
+    agentId: string;
+    versionId: string;
+    expectedProvenance?: "onboarding" | "legacy_reconciliation";
+  },
 ): Promise<PublishResult> {
   const { data: version, error: readError } = await admin
     .from("ai_agent_versions")
@@ -63,16 +69,27 @@ export async function publishAgentVersion(
     if (credentialError && version.credential_id !== null) {
       return { ok: false, code: "internal_error", message: credentialError.message };
     }
-    const discovered = (credential?.models_available ?? []).filter(
-      (modelId): modelId is string => typeof modelId === "string" && modelId.length > 0,
-    );
-    if (version.provider === "deepseek" && (version.credential_id === null || discovered.includes(version.model))) {
-      const modelId = version.model;
+    const discovered =
+      version.provider === "deepseek"
+        ? normalizeDeepSeekModels([
+            ...(credential?.models_available ?? []),
+            ...((credential?.models_available ?? []).length > 0 ? ["deepseek-flash"] : []),
+          ])
+        : (credential?.models_available ?? []).filter(
+            (modelId: unknown): modelId is string =>
+              typeof modelId === "string" && modelId.length > 0,
+          );
+    if (
+      version.provider === "deepseek" &&
+      (version.credential_id === null ||
+        discovered.includes(canonicalizeDeepSeekModel(version.model)))
+    ) {
+      const modelId = canonicalizeDeepSeekModel(version.model);
       const { error: catalogError } = await admin.from("ai_models").upsert(
         {
           provider: version.provider,
           model_id: modelId,
-          display_name: modelId,
+          display_name: modelId === "deepseek-flash" ? "DeepSeek V4.1 Flash" : modelId,
           supports_tools: true,
           is_default_for_provider: false,
           source: "credential",
@@ -89,7 +106,14 @@ export async function publishAgentVersion(
     p_org_id: params.orgId,
     p_agent_id: params.agentId,
     p_version_id: params.versionId,
-    ...(params.expectedProvenance ? { p_platform_credential_verified: platform, p_expected_provenance: params.expectedProvenance } : platform ? { p_platform_credential_verified: true } : {}),
+    ...(params.expectedProvenance
+      ? {
+          p_platform_credential_verified: platform,
+          p_expected_provenance: params.expectedProvenance,
+        }
+      : platform
+        ? { p_platform_credential_verified: true }
+        : {}),
   });
 
   if (error) {

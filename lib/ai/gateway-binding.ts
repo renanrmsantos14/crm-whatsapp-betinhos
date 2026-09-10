@@ -27,6 +27,7 @@ import { createOpenAI } from "@ai-sdk/openai";
 import type { LanguageModel } from "ai";
 
 import { decryptKey, byteaToBuffer } from "@/lib/crypto/aes_gcm";
+import { canonicalizeDeepSeekModel, withDeepSeekThinkingDisabled } from "@/lib/ai/deepseek";
 import { logger } from "@/lib/logger";
 import { createAdminClient } from "@/lib/supabase/admin";
 
@@ -64,8 +65,7 @@ export async function resolverModeloDoPonto(
     // Antes da chave da instalação vem a credencial da PRÓPRIA organização —
     // o degrau do meio de `resolveOrgLlmConfig`, que esta pilha pulava.
     const daOrg = await credencialDaOrganizacao(organizationId);
-    const idNoProvider =
-      daOrg === null ? null : idParaOProvider(daOrg.provider, String(padrao));
+    const idNoProvider = daOrg === null ? null : idParaOProvider(daOrg.provider, String(padrao));
     if (daOrg !== null && idNoProvider !== null) {
       const model = instanciar(daOrg.provider, daOrg.apiKey, idNoProvider, null);
       if (model !== null) {
@@ -99,7 +99,9 @@ export async function resolverModeloDoPonto(
       provider: binding.provider,
     });
     const fallback = resolveLanguageModel(padrao);
-    return fallback === null ? null : { model: fallback, modelId: String(padrao), origem: "padrao" };
+    return fallback === null
+      ? null
+      : { model: fallback, modelId: String(padrao), origem: "padrao" };
   }
 
   return { model, modelId: binding.model_id, origem: "binding" };
@@ -112,10 +114,7 @@ interface LinhaBinding {
   base_url: string | null;
 }
 
-async function lerBinding(
-  purpose: string,
-  organizationId: string,
-): Promise<LinhaBinding | null> {
+async function lerBinding(purpose: string, organizationId: string): Promise<LinhaBinding | null> {
   try {
     const admin = createAdminClient();
     // Admin client bypassa RLS, então o filtro por organização é PROGRAMÁTICO e
@@ -224,10 +223,13 @@ async function credencialDaOrganizacao(
     // cadastrou credencial", e o operador vê a conta do `.env` sendo debitada
     // sem nunca saber por quê. Vai só a CLASSE do erro: a mensagem pode
     // carregar material da credencial, o nome do erro não.
-    logger.warn("credencial da organização não pôde ser lida; seguindo para a chave da instalação", {
-      organizationId,
-      erro: erro instanceof Error ? erro.name : typeof erro,
-    });
+    logger.warn(
+      "credencial da organização não pôde ser lida; seguindo para a chave da instalação",
+      {
+        organizationId,
+        erro: erro instanceof Error ? erro.name : typeof erro,
+      },
+    );
     return null;
   }
 }
@@ -288,7 +290,11 @@ function instanciar(
     case "openrouter":
       return createOpenAI({ apiKey, baseURL: baseUrl ?? OPENROUTER_BASE_URL })(modelId);
     case "deepseek":
-      return createOpenAI({ apiKey, baseURL: baseUrl ?? "https://api.deepseek.com" })(modelId);
+      return createOpenAI({
+        apiKey,
+        baseURL: baseUrl ?? "https://api.deepseek.com",
+        fetch: withDeepSeekThinkingDisabled(fetch),
+      })(canonicalizeDeepSeekModel(modelId));
     default:
       return null;
   }

@@ -9,6 +9,7 @@
  * Timeout 5s, sem retry. Erros 401 são distintos de erros de rede.
  */
 import { PROVEDORES } from "@/lib/ai/pontos/provedores";
+import { normalizeDeepSeekModels } from "@/lib/ai/deepseek";
 
 /**
  * Os provedores cuja CHAVE este arquivo sabe validar.
@@ -179,16 +180,19 @@ export async function validateDeepSeekKey(apiKey: string): Promise<ValidationRes
     if (res.status === 401 || res.status === 403) return { ok: false, error: "auth_failed_401" };
     if (!res.ok) return { ok: false, error: `provider_status_${res.status}` };
     const json = (await res.json()) as { data?: { id?: string }[] };
-    return { ok: true, models: (json.data ?? []).map((m) => m.id ?? "").filter(Boolean) };
+    return {
+      ok: true,
+      models: normalizeDeepSeekModels([
+        ...(json.data ?? []).map((m) => m.id ?? "").filter(Boolean),
+        "deepseek-flash",
+      ]),
+    };
   } catch (err) {
     return { ok: false, error: err instanceof Error ? err.name : "network_error" };
   }
 }
 
-export function validateProviderKey(
-  provider: Provider,
-  apiKey: string,
-): Promise<ValidationResult> {
+export function validateProviderKey(provider: Provider, apiKey: string): Promise<ValidationResult> {
   switch (provider) {
     case "anthropic":
       return validateAnthropicKey(apiKey);

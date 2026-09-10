@@ -2,6 +2,7 @@ import { listSelectableChannels, type SelectableChannel } from "@/lib/channels/s
 import { createAdminClient } from "@/lib/supabase/admin";
 import { capacidadesPadraoDoOnboarding } from "./capacidades-padrao";
 import { escolherModeloDoProvedor } from "./escolher-modelo";
+import { canonicalizeDeepSeekModel, normalizeDeepSeekModels } from "@/lib/ai/deepseek";
 import { chaveDePlataforma } from "@/lib/ai/runtime/agent";
 import { publishAgentVersion } from "./publish";
 interface AgenteDoOnboarding {
@@ -136,9 +137,13 @@ export async function publishFirstVersion(
     .eq("organization_id", orgId)
     .eq("provider", provider)
     .eq("is_active", true);
-  const idsDescobertos = (credenciais ?? [])
+  const idsBrutos = (credenciais ?? [])
     .filter((c) => !selection?.credentialId || c.id === selection.credentialId)
     .flatMap((c) => c.models_available ?? []);
+  const idsDescobertos =
+    provider === "deepseek"
+      ? normalizeDeepSeekModels([...idsBrutos, ...(idsBrutos.length > 0 ? ["deepseek-flash"] : [])])
+      : idsBrutos;
   const modelosComCredencial = [
     ...(modelos ?? []),
     ...idsDescobertos
@@ -152,7 +157,10 @@ export async function publishFirstVersion(
   if (!escolha.escolhido) {
     return { published: false, reason: "no_model", provider, motivo: escolha.motivo };
   }
-  const modelId = selection?.model ?? escolha.modelId;
+  const modelId =
+    provider === "deepseek"
+      ? canonicalizeDeepSeekModel(selection?.model ?? escolha.modelId)
+      : (selection?.model ?? escolha.modelId);
   if (selection && !modelosComCredencial.some((m) => m.model_id === modelId && m.supports_tools))
     return { published: false, reason: "failed", message: "model_not_found" };
 

@@ -9,6 +9,7 @@ import { generateReplyDraft } from "@/lib/agent-engine/agent/reply-drafts";
 import { ok, fail } from "@/lib/api/wrappers";
 import { audit } from "@/lib/audit";
 import { traduzir } from "@/lib/i18n/dicionario";
+import { logger } from "@/lib/logger";
 export const dynamic = "force-dynamic";
 type Ctx = { params: Promise<{ id: string }> };
 async function context(ctx: Ctx, requestId: string) {
@@ -71,7 +72,13 @@ export async function POST(_req: NextRequest, ctx: Ctx) {
       { draft: draft.original_body ?? "", draft_id: draft.id, status: draft.status },
       { requestId },
     );
-  } catch {
+  } catch (error) {
+    logger.error("[draft-reply] geração falhou", {
+      requestId,
+      conversationId,
+      errorName: error instanceof Error ? error.name : "unknown_error",
+      errorMessage: error instanceof Error ? error.message.slice(0, 240) : "unknown_error",
+    });
     return fail(
       "reply_unavailable",
       c.t("Não foi possível gerar a sugestão. Confira a publicação e a configuração do agente."),

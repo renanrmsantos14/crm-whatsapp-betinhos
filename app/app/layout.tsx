@@ -1,6 +1,7 @@
 import { InterfaceRefresh } from "@/hooks/auth/InterfaceRefresh";
 import { redirect } from "next/navigation";
 import { cookies } from "next/headers";
+import { Suspense } from "react";
 import {
   isMfaEnrolled,
   loadAuthUserForRender,
@@ -20,7 +21,19 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { ImpersonateBanner } from "@/components/app/ImpersonateBanner";
 import { ConexaoCaidaBanner } from "@/components/app/ConexaoCaidaBanner";
 import { IdiomaProvider } from "@/lib/i18n/IdiomaProvider";
-import { listarConexoesCaidas, type ConexaoCaida } from "@/lib/channels/health";
+import { listarConexoesCaidas } from "@/lib/channels/health";
+
+/**
+ * O alerta de saúde não pode segurar a casca inteira do produto.
+ *
+ * A consulta é útil, mas não é pré-requisito para começar a atender. Se WAHA
+ * ou o banco estiverem lentos, o Inbox ainda precisa entregar a lista e o
+ * composer; o alerta chega no stream quando a leitura terminar.
+ */
+async function BannerDeConexaoCaida({ organizationId }: { organizationId: string }) {
+  const caidas = await listarConexoesCaidas(createAdminClient(), organizationId);
+  return <ConexaoCaidaBanner caidas={caidas} />;
+}
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const user = await loadAuthUserForRender();
@@ -106,24 +119,12 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     }
   }
 
-  // Estas quatro leituras não dependem umas das outras. Antes eram aguardadas
+  // Estas três leituras não dependem umas das outras. Antes eram aguardadas
   // em sequência e o primeiro HTML autenticado pagava quatro viagens ao banco
   // mesmo quando nenhuma delas mudava a decisão de roteamento. Mantemos os
   // redirects acima antes do lote: uma organização não iniciada/suspensa não
   // dispara consultas de shell que nunca serão renderizadas.
-  const adminForShell = admin;
-  const orgForShell = activeOrg;
-  const conexoesCaidasPromise =
-    orgForShell && adminForShell
-      ? (async () => await listarConexoesCaidas(adminForShell, orgForShell.orgId))()
-      : Promise.resolve<ConexaoCaida[]>([]);
-  const [conexoesCaidas, store, enrolled, needsMfaGate] = await Promise.all([
-    // A conexão caiu? A consulta mora no seam (`lib/channels/health`), não aqui:
-    // tela que monta o select de `channel_sessions` à mão foi o que deixou três
-    // seletores oferecendo canal arquivado, e o invariante `canais-selecionaveis`
-    // existe por causa disso. De quebra, o filtro de estados fica LITERALMENTE o
-    // mesmo que decide o aviso da Central — duas listas divergiriam com o tempo.
-    conexoesCaidasPromise,
+  const [store, enrolled, needsMfaGate] = await Promise.all([
     // Read sidebar collapsed state SSR to avoid flash.
     cookies(),
     isMfaEnrolled(),
@@ -169,7 +170,11 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         <div data-marca-org="" className="contents">
           <EstiloDaMarcaDaOrganizacao css={cssDaOrganizacao} />
           <ImpersonateBanner impersonating={impersonating} />
-          <ConexaoCaidaBanner caidas={conexoesCaidas} />
+          {activeOrg ? (
+            <Suspense fallback={null}>
+              <BannerDeConexaoCaida organizationId={activeOrg.orgId} />
+            </Suspense>
+          ) : null}
           {needsMfaGate ? (
             // Gate always mounted for MFA-required roles; it latches the blocking
             // decision client-side so the enroll Server Action's revalidation

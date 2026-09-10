@@ -10,6 +10,33 @@
 # O container é SEMPRE derrubado no EXIT (sucesso ou falha).
 set -euo pipefail
 
+# No Windows, o `bash` do pnpm pode ser o WSL: o binário `docker` fica
+# resolvido dentro da distro e não consegue falar com o daemon do Docker
+# Desktop, enquanto `docker.exe` consegue. No CI Linux, mantém-se `docker`.
+DOCKER_CMD=(docker)
+if ! docker info >/dev/null 2>&1 && command -v docker.exe >/dev/null 2>&1; then
+  DOCKER_CMD=(docker.exe)
+fi
+docker_cmd() { "${DOCKER_CMD[@]}" "$@"; }
+
+# Pelo mesmo motivo, o shim `node_modules/.bin/vitest` procura `node` dentro do
+# WSL e falha mesmo quando o Node do Windows está instalado. Chamar o módulo
+# diretamente pelo `node.exe` mantém a resolução de dependências do pnpm.
+run_vitest() {
+  if command -v node >/dev/null 2>&1; then
+    vitest "$@"
+    return
+  fi
+  if command -v node.exe >/dev/null 2>&1; then
+    local root_windows
+    root_windows="$(wslpath -w "$ROOT" 2>/dev/null || printf '%s' "$ROOT")"
+    node.exe "$root_windows/node_modules/vitest/vitest.mjs" "$@"
+    return
+  fi
+  echo "FATAL: não encontrei node nem node.exe para executar o Vitest" >&2
+  return 1
+}
+
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 BASELINE="$ROOT/supabase/baseline.sql"
 # A PORTA: quem PEDE escolhe; quem não pede deixa o Docker escolher.
@@ -102,13 +129,13 @@ cleanup() {
   #
   # O sintoma não aponta para cá: o disco enche horas depois, e quem paga é a
   # próxima sessão a rodar qualquer coisa.
-  docker rm -fv "$CONTAINER" >/dev/null 2>&1 || true
+  docker_cmd rm -fv "$CONTAINER" >/dev/null 2>&1 || true
   rm -f "$CARIMBO"
 }
 trap cleanup EXIT
 
 echo "==> subindo $IMAGE como $CONTAINER (worktree $DONO_WORKTREE, branch $DONO_BRANCH)"
-docker run -d --rm --name "$CONTAINER" \
+docker_cmd run -d --rm --name "$CONTAINER" \
   -p "$PUBLICACAO" \
   --label "deskcomm.harness=test-db" \
   --label "deskcomm.worktree=$DONO_WORKTREE" \
@@ -124,7 +151,7 @@ docker run -d --rm --name "$CONTAINER" \
 # por acidente — a env do shell de quem chamou é herdada. Com a porta escolhida
 # aqui dentro, sem o export os 49 iriam bater na 54329, que é de outra pessoa ou
 # de ninguém.
-PORT="$(docker port "$CONTAINER" 5432/tcp | head -1 | sed 's/.*://')"
+PORT="$(docker_cmd port "$CONTAINER" 5432/tcp | head -1 | sed 's/.*://')"
 [ -n "$PORT" ] || { echo "FATAL: não consegui ler a porta publicada do container" >&2; exit 1; }
 export TEST_DB_PORT="$PORT"
 echo "    ✓ publicado em 127.0.0.1:$PORT"
@@ -133,17 +160,17 @@ echo "    ✓ publicado em 127.0.0.1:$PORT"
 # testar via TCP 127.0.0.1 evita o falso-ready da fase de init).
 ready=0
 for _ in $(seq 1 60); do
-  if docker exec "$CONTAINER" psql -h 127.0.0.1 -U postgres -d postgres -c "select 1" >/dev/null 2>&1; then
+  if docker_cmd exec "$CONTAINER" psql -h 127.0.0.1 -U postgres -d postgres -c "select 1" >/dev/null 2>&1; then
     ready=1; break
   fi
   sleep 1
 done
 [ "$ready" = 1 ] || { echo "FATAL: postgres não ficou pronto em 60s" >&2; exit 1; }
 
-docker exec "$CONTAINER" psql -U postgres -d postgres -q -c "create database $TEMPLATE" >/dev/null
+docker_cmd exec "$CONTAINER" psql -U postgres -d postgres -q -c "create database $TEMPLATE" >/dev/null
 
 psql_install() {
-  docker exec -i "$CONTAINER" psql -U postgres -d "$TEMPLATE" -v ON_ERROR_STOP=1 -q -f - "$@"
+  docker_cmd exec -i "$CONTAINER" psql -U postgres -d "$TEMPLATE" -v ON_ERROR_STOP=1 -q -f - "$@"
 }
 
 echo "==> prelude: stubs mínimos do Supabase (roles, auth.uid(), extensions)"
@@ -310,7 +337,7 @@ echo "==> conferindo que o banco efêmero é o do PRODUTO (antes do baseline)"
 # `-q` é obrigatório: sem ele o stdout leva "CREATE FUNCTION"/"DROP FUNCTION"
 # junto do resultado e a comparação com "t" falha sempre — sonda que reprova o
 # banco certo é tão inútil quanto sonda que aprova o errado.
-fidelidade="$(docker exec -i "$CONTAINER" psql -U postgres -d "$TEMPLATE" -v ON_ERROR_STOP=1 -q -tA -f - <<'SQL'
+fidelidade="$(docker_cmd exec -i "$CONTAINER" psql -U postgres -d "$TEMPLATE" -v ON_ERROR_STOP=1 -q -tA -f - <<'SQL'
 create function public.fn_sonda_fidelidade_do_harness() returns int
   language sql security definer as $fn$ select 1 $fn$;
 select exists (
@@ -360,7 +387,7 @@ echo "==> banco \`postgres\` a partir do molde (o setupFile o recria a cada arqu
 #    "database postgres does not exist" em 99 arquivos. Aí o invariante
 #    tests/invariants/harness-isola-por-arquivo.test.ts aponta a regressão certa,
 #    com duas asserções, em vez de o run virar um muro de ruído.
-docker exec -i "$CONTAINER" psql -U postgres -d template1 -q -v ON_ERROR_STOP=1 -f - <<SQL
+docker_cmd exec -i "$CONTAINER" psql -U postgres -d template1 -q -v ON_ERROR_STOP=1 -f - <<SQL
 drop database if exists postgres with (force);
 create database postgres template $TEMPLATE;
 SQL
@@ -370,7 +397,7 @@ echo "==> invariantes: vitest (tests/invariants) — banco novo por ARQUIVO, ord
 # variável escondida, e sortear é o que impede a próxima colisão de fixture de
 # ficar dormente até alguém renomear um arquivo.
 TEST_DB_CONTAINER="$CONTAINER" TEST_DB_TEMPLATE="$TEMPLATE" TEST_DB_PORT="$PORT" \
-  vitest run --config vitest.db.config.ts --sequence.shuffle.files=true "$@"
+  run_vitest run --config vitest.db.config.ts --sequence.shuffle.files=true "$@"
 
 # A RECUSA. Vem depois do vitest e ANTES da palavra "verde", porque o que se
 # recusa aqui é o próprio resultado — inclusive um resultado que passou.

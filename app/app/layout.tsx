@@ -124,14 +124,26 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   // mesmo quando nenhuma delas mudava a decisão de roteamento. Mantemos os
   // redirects acima antes do lote: uma organização não iniciada/suspensa não
   // dispara consultas de shell que nunca serão renderizadas.
-  const [store, enrolled, needsMfaGate] = await Promise.all([
+  const mfaGatePromise = requiresMfa(
+    activeOrg?.role,
+    user.is_platform_admin,
+    user.id,
+    activeOrg?.orgId,
+  ).then(async (needsMfaGate) => ({
+    needsMfaGate,
+    // A lista de fatores é uma viagem ao GoTrue e só é necessária quando a
+    // política realmente abre o gate. Usuários sem exigência não pagam essa
+    // consulta em toda navegação autenticada.
+    enrolled: needsMfaGate ? await isMfaEnrolled() : false,
+  }));
+  const [store, mfaGate] = await Promise.all([
     // Read sidebar collapsed state SSR to avoid flash.
     cookies(),
-    isMfaEnrolled(),
     // A decisão deixou de ser uma constante de papel: ela lê a política de quem
     // pode exigir (a plataforma e a empresa). Ver `lib/auth/politica-mfa.ts`.
-    requiresMfa(activeOrg?.role, user.is_platform_admin, user.id, activeOrg?.orgId),
+    mfaGatePromise,
   ]);
+  const { enrolled, needsMfaGate } = mfaGate;
   const collapsed = store.get("sidebar_collapsed")?.value === "1";
 
   const impersonating = user.support

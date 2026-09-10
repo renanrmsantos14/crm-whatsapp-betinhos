@@ -38,7 +38,7 @@ export async function publishAgentVersion(
 ): Promise<PublishResult> {
   const { data: version, error: readError } = await admin
     .from("ai_agent_versions")
-    .select("provider,credential_id")
+    .select("provider, model, credential_id")
     .eq("organization_id", params.orgId)
     .eq("agent_id", params.agentId)
     .eq("id", params.versionId)
@@ -48,6 +48,43 @@ export async function publishAgentVersion(
   const platform = version.credential_id === null;
   if (platform && !chaveDePlataforma(version.provider))
     return { ok: false, code: "credential_missing", message: "credential_missing" };
+
+  // O RPC de publicação valida o modelo em `ai_models`. Provedores como
+  // DeepSeek descobrem o catálogo por credencial (`models_available`), então
+  // materializamos o modelo validado no catálogo global antes do RPC. Sem isso
+  // a tela aceitava o modelo, mas a função SQL recusava com model_not_found.
+  if (version.credential_id !== null) {
+    const { data: credential, error: credentialError } = await admin
+      .from("ai_provider_credentials")
+      .select("provider, models_available")
+      .eq("id", version.credential_id)
+      .eq("organization_id", params.orgId)
+      .maybeSingle();
+    if (credentialError) {
+      return { ok: false, code: "internal_error", message: credentialError.message };
+    }
+    const discovered = (credential?.models_available ?? []).filter(
+      (modelId): modelId is string => typeof modelId === "string" && modelId.length > 0,
+    );
+    if (discovered.includes(version.model)) {
+      const modelId = version.model;
+      const { error: catalogError } = await admin.from("ai_models").upsert(
+        {
+          provider: version.provider,
+          model_id: modelId,
+          display_name: modelId,
+          supports_tools: true,
+          is_default_for_provider: false,
+          source: "credential",
+        },
+        { onConflict: "provider,model_id", ignoreDuplicates: true },
+      );
+      if (catalogError) {
+        return { ok: false, code: "internal_error", message: catalogError.message };
+      }
+    }
+  }
+
   const { data, error } = await admin.rpc("fn_publish_ai_agent_version", {
     p_org_id: params.orgId,
     p_agent_id: params.agentId,

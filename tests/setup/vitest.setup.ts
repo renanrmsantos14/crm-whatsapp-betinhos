@@ -1,6 +1,19 @@
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { File as NodeFile } from "node:buffer";
 import { resolve } from "node:path";
+
+// Alguns testes de governança executam os mesmos scripts shell usados no CI.
+// No Windows, `bash` pode resolver para o atalho do WSL sem distribuição e
+// `grep` não vem no PATH, embora o Git for Windows já forneça ambos. Priorizar
+// essas ferramentas apenas no processo do Vitest mantém a suíte executável no
+// ambiente nativo do operador sem mudar o runtime do produto.
+if (process.platform === "win32") {
+  const gitTools = ["C:\\Program Files\\Git\\bin", "C:\\Program Files\\Git\\usr\\bin"];
+  const existentes = gitTools.filter((dir) => existsSync(dir));
+  if (existentes.length > 0) {
+    process.env.PATH = `${existentes.join(";")};${process.env.PATH ?? ""}`;
+  }
+}
 
 /**
  * Remove um par de aspas (simples ou duplas) que envolva o valor inteiro —

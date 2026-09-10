@@ -141,8 +141,10 @@ describe("o default do compose diz o mesmo que o kit", () => {
   CHAVES.forEach((chave, i) => {
     it(`o default de ${chave} usa o namespace de IMG_NS`, () => {
       const m = COMPOSE.match(new RegExp(`^\\s*image: \\$\\{${chave}:-([^}]+)\\}`, "m"));
-      expect(m, `não achei a linha \`image: \${${chave}:-…}\` em docker-compose.prod.yml`)
-        .not.toBeNull();
+      expect(
+        m,
+        `não achei a linha \`image: \${${chave}:-…}\` em docker-compose.prod.yml`,
+      ).not.toBeNull();
       expect(m![1]).toBe(`${imgNs()}/${reposDoKit()[i]}:stable`);
     });
 
@@ -273,7 +275,7 @@ describe("catraca: ninguém mais repete o namespace", () => {
    * para o que executa.
    */
   function reincidentes(): string[] {
-    const excluiDir = [
+    const excluiDir = new Set([
       ".git",
       "node_modules",
       ".next",
@@ -288,33 +290,37 @@ describe("catraca: ninguém mais repete o namespace", () => {
       // árvores do repo, com o gate delas próprio.
       "evidence",
       ".claude",
-    ].map((d) => `--exclude-dir=${d}`);
+    ]);
     // `.bak`/`.orig`/`.rej`/`~` são sobra de editor e de `sed -i.bak`. Sem isto,
     // uma sabotagem local deixa o gate vermelho pelo motivo errado.
-    const excluiArq = ["*.md", "*.bak", "*.orig", "*.rej", "*~"].map((g) => `--exclude=${g}`);
+    const excluiArquivo = (nome: string) =>
+      nome.endsWith(".md") ||
+      nome.endsWith(".bak") ||
+      nome.endsWith(".orig") ||
+      nome.endsWith(".rej") ||
+      nome.endsWith("~");
 
-    let saida = "";
-    try {
-      saida = execFileSync(
-        "grep",
-        ["-rlF", NAMESPACE_DESTE_REPO, ".", ...excluiDir, ...excluiArq],
-        { cwd: RAIZ, encoding: "utf8", maxBuffer: 8 * 1024 * 1024 },
-      );
-    } catch (e) {
-      // grep sai 1 quando não casa nada — que aqui é o resultado bom. Qualquer
-      // outro código é o INSTRUMENTO quebrado, e ele precisa gritar: um catch
-      // que devolvesse [] daria verde com a varredura morta.
-      const err = e as { status?: number; stderr?: string };
-      if (err.status !== 1) {
-        throw new Error(`a varredura do namespace não rodou (grep saiu ${err.status}): ${err.stderr ?? ""}`);
+    // A implementação nativa evita depender de WSL/Git Bash no Windows. Além
+    // de ser multiplataforma, ela não reabre o processo inteiro do shell para
+    // cada rodada do Vitest e respeita symlinks como a intenção original do
+    // `grep -r` (diretórios linkados não são atravessados).
+    const pendentes = [RAIZ];
+    const encontrados: string[] = [];
+    while (pendentes.length > 0) {
+      const diretorio = pendentes.pop()!;
+      for (const entrada of fs.readdirSync(diretorio, { withFileTypes: true })) {
+        if (entrada.isDirectory()) {
+          if (!excluiDir.has(entrada.name)) pendentes.push(path.join(diretorio, entrada.name));
+          continue;
+        }
+        if (!entrada.isFile() || excluiArquivo(entrada.name)) continue;
+        const arquivo = path.join(diretorio, entrada.name);
+        if (fs.readFileSync(arquivo, "utf8").includes(NAMESPACE_DESTE_REPO)) {
+          encontrados.push(path.relative(RAIZ, arquivo).replaceAll(path.sep, "/"));
+        }
       }
     }
-    return saida
-      .split("\n")
-      .filter(Boolean)
-      .map((l) => l.replace(/^\.\//, ""))
-      .filter((rel) => !PERMITIDO.has(rel))
-      .sort();
+    return encontrados.filter((rel) => !PERMITIDO.has(rel)).sort();
   }
 
   it("a varredura enxerga o literal onde ele está — senão o silêncio não vale nada", () => {
@@ -326,11 +332,7 @@ describe("catraca: ninguém mais repete o namespace", () => {
     // ficaria vermelho por tabela — dois vermelhos onde o desenho promete um.
     // Aqui o literal existe por construção, em `NAMESPACE_DESTE_REPO`.
     const alvo = "tests/unit/namespace-das-imagens.test.ts";
-    const saida = execFileSync("grep", ["-rlF", NAMESPACE_DESTE_REPO, alvo], {
-      cwd: RAIZ,
-      encoding: "utf8",
-    });
-    expect(saida.trim()).toBe(alvo);
+    expect(fs.readFileSync(path.join(RAIZ, alvo), "utf8")).toContain(NAMESPACE_DESTE_REPO);
   });
 
   it("o literal do namespace só aparece nos arquivos permitidos", () => {

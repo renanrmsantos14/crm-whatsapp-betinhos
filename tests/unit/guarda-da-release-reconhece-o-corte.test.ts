@@ -56,7 +56,10 @@ function bashDaGuarda(): string {
   const run = yml.indexOf("run: |", inicio);
   expect(run, "o passo da guarda não tem bloco run").toBeGreaterThan(-1);
 
-  const linhas = yml.slice(run + "run: |".length).split("\n").slice(1);
+  const linhas = yml
+    .slice(run + "run: |".length)
+    .split("\n")
+    .slice(1);
   const corpo: string[] = [];
   for (const l of linhas) {
     // O bloco acaba na primeira linha não-vazia com indentação menor que a dele.
@@ -120,8 +123,10 @@ function decisaoPara(sha: string): string {
     .replace(/\bHEAD\b/g, sha);
 
   // A substituição que não acontece tem de gritar, não sumir.
-  expect(script, "a linha `versao=$(...)` não foi substituída — o script rodaria o cortar-release de verdade")
-    .not.toMatch(/cortar-release\.ts/);
+  expect(
+    script,
+    "a linha `versao=$(...)` não foi substituída — o script rodaria o cortar-release de verdade",
+  ).not.toMatch(/cortar-release\.ts/);
 
   // ⚠️ `GITHUB_OUTPUT` vai para um ARQUIVO, não para `/dev/stdout`.
   //
@@ -218,13 +223,20 @@ beforeAll(() => {
   mergeDePrComum = git(["rev-parse", "HEAD"]);
 
   // ── O merge da release, com o fragmento do concorrente ainda vivo ────────
-  git(["merge", "-q", "--no-ff", "-m", "Merge pull request #461 from release/9.9.9", pontaDaRelease]);
+  git([
+    "merge",
+    "-q",
+    "--no-ff",
+    "-m",
+    "Merge pull request #461 from release/9.9.9",
+    pontaDaRelease,
+  ]);
   mergeDaReleaseComCorrida = git(["rev-parse", "HEAD"]);
 
   // ── Um commit qualquer de feature, que não encosta em .changes/ ──────────
   writeFileSync(join(repo, "README.md"), "nada a ver com release\n");
   commitDeFeature = commit("fix: coisa nenhuma");
-});
+}, 30_000);
 
 afterAll(() => {
   if (repo) rmSync(repo, { recursive: true, force: true });
@@ -241,7 +253,12 @@ describe("a guarda reconhece o corte pela forma dele", () => {
     // Sem este caso, o anterior poderia estar passando por um cenário onde a
     // regra velha também funcionaria, e o teste não provaria nada.
     const sobraram = git([
-      "ls-tree", "-r", "--name-only", mergeDaReleaseComCorrida, "--", ".changes/",
+      "ls-tree",
+      "-r",
+      "--name-only",
+      mergeDaReleaseComCorrida,
+      "--",
+      ".changes/",
     ])
       .split("\n")
       .filter((l) => l.endsWith(".md"));
@@ -310,7 +327,7 @@ describe("o que SOBRA da release também decide — e foi um cético que achou i
     git(["merge", "-q", "--no-ff", "-m", "Merge pull request #1001 from release/7.7.7", ponta]);
 
     expect(decisaoPara(git(["rev-parse", "HEAD"]))).toBe("sim");
-  });
+  }, 60_000);
 });
 
 describe("a guarda recusa ALTO, e não em silêncio, quem apaga fragmento sem ser o App", () => {

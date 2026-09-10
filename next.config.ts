@@ -37,6 +37,10 @@ const nextConfig: NextConfig = {
   },
   reactStrictMode: true,
   poweredByHeader: false,
+  // O launcher local acessa o servidor por 127.0.0.1 enquanto o navegador
+  // normalmente usa localhost. Sem esta allowlist o HMR é bloqueado pelo
+  // Next 16 e a primeira tela fica parecendo congelada até um refresh manual.
+  allowedDevOrigins: ["localhost", "127.0.0.1"],
   // typedRoutes moved out of experimental in Next 15.5+
   typedRoutes: true,
   experimental: {

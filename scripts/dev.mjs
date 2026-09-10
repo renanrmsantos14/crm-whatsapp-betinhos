@@ -5,7 +5,8 @@ import { fileURLToPath } from "node:url";
 
 const DEFAULT_PORT = 3000;
 const MAX_PORT_SEARCH = 20;
-const HEALTHCHECK_TIMEOUT_MS = 800;
+const HEALTHCHECK_TIMEOUT_MS = 2_000;
+const HEALTHCHECK_PATH = "/manifest.webmanifest";
 
 function readPort(args) {
   const portIndex = args.findIndex((arg) => arg === "--port" || arg === "-p");
@@ -50,12 +51,12 @@ async function findRunningNextPort(startPort) {
     const timeout = setTimeout(() => controller.abort(), HEALTHCHECK_TIMEOUT_MS);
 
     try {
-      const response = await fetch(`http://127.0.0.1:${port}/login`, {
+      const response = await fetch(`http://127.0.0.1:${port}${HEALTHCHECK_PATH}`, {
         signal: controller.signal,
       });
       const pathname = response.headers.get("x-pathname");
 
-      if (pathname === "/login" && response.status < 500) {
+      if (pathname === HEALTHCHECK_PATH && response.status < 500) {
         return port;
       }
     } catch {

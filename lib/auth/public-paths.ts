@@ -49,6 +49,10 @@ export const PUBLIC_PATHS: RegExp[] = [
   // `/icon.png` (inexistente) devolvia 404 — a diferença é só a extensão.
   /^\/icon$/,
   /^\/manifest\.webmanifest$/,
+  // O Chrome consulta este arquivo auxiliar em desenvolvimento. Ele não
+  // contém dados da aplicação; exigir sessão faria o proxy esperar o Supabase
+  // e transformar uma sondagem descartável em uma navegação lenta.
+  /^\/\.well-known\/appspecific\/com\.chrome\.devtools\.json$/,
   /^\/team\/accept-invite\/.+$/,
   /^\/account-suspended$/,
   // Documentos legais. O checkbox obrigatório de `/onboarding/welcome` linka os

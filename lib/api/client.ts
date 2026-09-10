@@ -9,6 +9,7 @@ export type RequestOpts = {
   schema?: ZodSchema<unknown>;
   idempotencyKey?: string;
   timeoutMs?: number;
+  retry?: boolean;
   headers?: Record<string, string>;
   signal?: AbortSignal;
 };
@@ -148,7 +149,7 @@ async function request<T>(
       }
 
       // Retry on 429/503
-      if (RETRYABLE_STATUSES.has(res.status) && attempt < MAX_ATTEMPTS) {
+      if (opts.retry !== false && RETRYABLE_STATUSES.has(res.status) && attempt < MAX_ATTEMPTS) {
         const retryAfter = parseRetryAfterSeconds(res.headers.get("Retry-After"));
         const delay = retryAfter !== null ? retryAfter * 1000 : backoffMs(attempt);
         await sleep(delay, opts.signal);
@@ -187,7 +188,7 @@ async function request<T>(
       }
       // Network error / timeout — retry
       lastError = err;
-      if (attempt < MAX_ATTEMPTS) {
+      if (opts.retry !== false && attempt < MAX_ATTEMPTS) {
         await sleep(backoffMs(attempt), opts.signal);
         continue;
       }

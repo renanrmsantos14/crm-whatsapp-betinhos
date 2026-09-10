@@ -95,4 +95,13 @@ describe("apiClient", () => {
     const headers = fetchMock.mock.calls[0]![1].headers as Record<string, string>;
     expect(headers["Idempotency-Key"]).toBe("custom-key-123");
   });
+
+  it("t8: retry=false não repete uma falha de rede", async () => {
+    fetchMock.mockRejectedValueOnce(new TypeError("fetch failed"));
+
+    await expect(
+      apiClient.post("/x", { a: 1 }, { retry: false }),
+    ).rejects.toThrow("fetch failed");
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
 });

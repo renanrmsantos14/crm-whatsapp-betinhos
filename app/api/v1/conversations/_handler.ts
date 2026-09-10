@@ -10,6 +10,8 @@ import { ApiError } from "@/lib/api/types";
 import type { Actor, HandlerCtx } from "@/lib/api/handlers/types";
 import { audit } from "@/lib/audit";
 import { traduzir } from "@/lib/i18n/dicionario";
+import { comandosDaFila } from "@/lib/inbox/comando-da-conversa";
+import { orgTemAutomatico } from "@/lib/ai/agents/org-tem-automatico";
 import { CONVERSATION_TERMINAL_STATUSES } from "@/lib/schemas";
 import type {
   ListConversationsQuery,
@@ -148,6 +150,12 @@ export async function listConversationsHandler(
   ctx: HandlerCtx,
   q: ListConversationsQuery,
 ): Promise<ListConversationsResult> {
+  // A aba Fila não precisa fazer uma segunda ida ao browser para descobrir se
+  // deve pedir também `automatico`. O servidor já tem a org autenticada e pode
+  // resolver a intenção operacional no mesmo request da lista.
+  const comandosDaFilaResolvidos = q.fila
+    ? comandosDaFila(await orgTemAutomatico(supabase, ctx.organization_id))
+    : null;
   // Fila (assigned_to=unassigned): ordena por TEMPO DE ESPERA — quem espera há
   // mais tempo primeiro. `last_inbound_at` = última mensagem do cliente = "há
   // quanto tempo aguarda resposta" (não `created_at`, que pode ser uma conversa
@@ -157,7 +165,10 @@ export async function listConversationsHandler(
   // a ordenação por tempo de espera sumiria **sem nenhum sintoma na tela**: a
   // lista continuaria populada, só que ordenada por atividade recente, e quem
   // espera desde ontem afundaria embaixo de quem escreveu agora.
-  const isQueue = q.comando?.includes("aguardando") ?? q.assigned_to === "unassigned";
+  const isQueue =
+    q.fila === true ||
+    q.comando?.includes("aguardando") === true ||
+    q.assigned_to === "unassigned";
   const sortCol = isQueue ? "last_inbound_at" : "last_message_at";
   const asc = isQueue;
 
@@ -177,7 +188,9 @@ export async function listConversationsHandler(
   // O filtro de QUEM MANDA (migration 0203). Vai no banco, e não em memória, para
   // o cursor de paginação continuar valendo: filtrar depois de paginar devolveria
   // páginas curtas e um "carregar mais" que às vezes não traz nada.
-  if (q.comando && q.comando.length > 0) {
+  if (comandosDaFilaResolvidos) {
+    query = query.in("comando_da_conversa", comandosDaFilaResolvidos);
+  } else if (q.comando && q.comando.length > 0) {
     query = query.in("comando_da_conversa", q.comando);
   }
   // Depois do `status` de propósito: pedir um status terminal E `exclude_finished`

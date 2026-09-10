@@ -19,18 +19,12 @@ export const dynamic = "force-dynamic";
 export async function GET(req: NextRequest): Promise<Response> {
   const requestId = randomUUID();
   const supabase = await createClient();
-
-  const {
-    data: { user },
-    error: authErr,
-  } = await supabase.auth.getUser();
-  if (authErr || !user) {
+  const authUser = await loadAuthUser();
+  if (!authUser) {
     return fail("unauthenticated", "Auth required.", 401, { requestId });
   }
-
-  const authUser = await loadAuthUser();
   const t = (texto: string) => traduzir(texto, authUser?.idioma ?? "pt-BR");
-  const activeOrg = authUser ? await resolveActiveOrg(authUser) : null;
+  const activeOrg = await resolveActiveOrg(authUser);
   if (!activeOrg) {
     return fail("no_active_org", t("No active organization."), 403, { requestId });
   }
@@ -49,6 +43,7 @@ export async function GET(req: NextRequest): Promise<Response> {
     // Agora `tests/unit/rota-le-todo-filtro-do-schema.test.ts` reprova o próximo
     // esquecimento, em vez de este comentário pedir atenção.
     comando: url.searchParams.get("comando") ?? undefined,
+    fila: url.searchParams.get("fila") === "true" ? true : undefined,
     // O `tag` era o único param que o schema aceitava, o hook serializava e o
     // handler implementava — e que esta linha não lia. A cadeia rompia AQUI, no
     // meio: `InboxFilters` mostra o select "Filtrar por tag" sempre que a org tem
@@ -72,7 +67,7 @@ export async function GET(req: NextRequest): Promise<Response> {
       supabase,
       {
         organization_id: activeOrg.orgId,
-        actor: { type: "user", id: user.id },
+        actor: { type: "user", id: authUser.id },
         requestId,
         idioma: authUser?.idioma,
       },

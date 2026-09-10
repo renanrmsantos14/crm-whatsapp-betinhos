@@ -55,6 +55,7 @@ describe("a rota lê todo filtro que o schema aceita", () => {
     expect(chaves.length).toBeGreaterThanOrEqual(6);
     expect(chaves).toContain("status");
     expect(chaves).toContain("comando");
+    expect(chaves).toContain("fila");
   });
 
   it.each(chavesDoSchema())("a rota lê `%s` de searchParams", (chave) => {

@@ -85,6 +85,8 @@ export interface ConversationsFilters {
    * vida, este é quem responde a próxima mensagem do cliente.
    */
   comando?: readonly ComandoDoBanco[];
+  /** A intenção da aba Fila; o servidor resolve o conjunto de comandos. */
+  fila?: boolean;
   search?: string;
   channel_session_id?: string;
   tag?: string;
@@ -119,6 +121,7 @@ export function useConversationsRealtime(
       if (filters.comando && filters.comando.length > 0) {
         qs.set("comando", filters.comando.join(","));
       }
+      if (filters.fila) qs.set("fila", "true");
       if (filters.exclude_finished) qs.set("exclude_finished", "true");
       if (filters.assigned_to) qs.set("assigned_to", filters.assigned_to);
       if (filters.search) qs.set("search", filters.search);

@@ -31,8 +31,6 @@ import { CaretLeft, ChatCircle, IdentificationCard } from "@/lib/ui/icons";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { cn } from "@/lib/utils";
-import { comandosDaFila } from "@/lib/inbox/comando-da-conversa";
-import { useAutomaticoAtivo } from "@/hooks/ai/useAutomaticoAtivo";
 
 /**
  * QUAL COLUNA APARECE NO CELULAR — as duas saem da MESMA pergunta.
@@ -66,7 +64,6 @@ export function colunasDoCelular(temSelecao: boolean): { lista: string; conversa
  */
 export function tabToFilter(
   tab: InboxFiltersValue["tab"],
-  automaticoDaOrg?: boolean,
 ): Partial<ConversationsFilters> {
   switch (tab) {
     case "unassigned":
@@ -78,9 +75,9 @@ export function tabToFilter(
       // o automático no comando. O atendente abria a Fila e via como trabalho
       // dele quase tudo que já estava sendo respondido.
       //
-      // `comandosDaFila` é quem cruza isso com o fato org-wide: numa instalação
-      // sem nenhum agente no ar, `automatico` também é "esperando gente".
-      return { comando: comandosDaFila(automaticoDaOrg) };
+      // O servidor cruza isso com o fato org-wide. A intenção fica estável no
+      // cliente, então descobrir se há automático não dispara uma segunda lista.
+      return { fila: true };
     case "mine":
       // Sem `exclude_finished` a aba mostra tudo que o atendente JÁ atendeu —
       // `Fechar` muda o status mas não solta o dono (de propósito: quem atendeu
@@ -156,29 +153,17 @@ export function InboxLayout({ initialSelectedId = null }: InboxLayoutProps = {})
    */
   const [respondendo, setRespondendo] = useState<ConversationMensagem | null>(null);
 
-  /**
-   * A ORG tem automático de pé? Sobe para cá porque agora é a ABA que precisa —
-   * `ConversationList` e `ConversationHeader` continuam lendo o mesmo hook, e o
-   * react-query dedupa: segue sendo uma requisição só.
-   *
-   * `undefined` enquanto carrega, e `comandosDaFila` trata isso como "assume que
-   * há" — a mesma convenção da regra. Numa org SEM automático a Fila nasce menor
-   * e completa quando a resposta chega; a janela é de ~200ms e o rótulo nunca
-   * discorda do filtro, porque os dois usam a mesma convenção.
-   */
-  const { data: automaticoDaOrg } = useAutomaticoAtivo();
   const composerRef = useRef<ComposerHandle | null>(null);
 
   const filters: ConversationsFilters = useMemo(
     () => ({
-      ...tabToFilter(filterValue.tab, automaticoDaOrg),
+      ...tabToFilter(filterValue.tab),
       search: filterValue.search || undefined,
       channel_session_id: filterValue.channel_session_id,
       tag: filterValue.tag,
     }),
     [
       filterValue.tab,
-      automaticoDaOrg,
       filterValue.search,
       filterValue.channel_session_id,
       filterValue.tag,
@@ -218,12 +203,10 @@ export function InboxLayout({ initialSelectedId = null }: InboxLayoutProps = {})
   //   49.183  GET conversations/<id>                              565ms
   //   49.775  GET contacts/<id>/crm-summary                    (>1034ms)
   //
-  // São QUATRO idas em série depois do documento. A lista é pedida duas vezes
-  // porque a `queryKey` muda quando `useAutomaticoAtivo` responde (ver
-  // `comandosDaFila`), e `isLoading` volta a ser verdadeiro na chave nova — ou
-  // seja, o gate segurava a busca única até a SEGUNDA lista assentar, e só
-  // então o painel do contato podia começar a carregar. O painel do contato
-  // aparecia ~4,7s depois da navegação, e é assim que `encerramento-atendimento`
+  // São QUATRO idas em série depois do documento. A intenção da Fila agora viaja
+  // estável como `fila=true`; o servidor resolve o automático sem trocar a
+  // `queryKey` no meio da carga. Antes, o painel do contato aparecia ~4,7s
+  // depois da navegação, e é assim que `encerramento-atendimento`
   // ficou intermitente: a Memória do contato chegava ~0,1–0,6s DEPOIS dos 5s da
   // asserção (o screenshot de falha, tirado logo em seguida, já a mostra).
   //

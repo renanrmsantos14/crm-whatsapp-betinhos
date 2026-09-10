@@ -28,14 +28,10 @@ export const dynamic = "force-dynamic";
 export async function GET(req: NextRequest): Promise<Response> {
   const requestId = randomUUID();
   const supabase = await createClient();
-  const {
-    data: { user },
-    error: authErr,
-  } = await supabase.auth.getUser();
-  if (authErr || !user) {
+  const authUser = await loadAuthUser();
+  if (!authUser) {
     return fail("unauthenticated", "Auth required.", 401, { requestId });
   }
-  const authUser = await loadAuthUser();
   const t = (texto: string) => traduzir(texto, authUser?.idioma ?? "pt-BR");
 
   const url = new URL(req.url);
@@ -55,14 +51,14 @@ export async function GET(req: NextRequest): Promise<Response> {
     });
   }
 
-  const orgId = authUser ? (await resolveActiveOrg(authUser))?.orgId : undefined;
+  const orgId = (await resolveActiveOrg(authUser))?.orgId;
 
   try {
     const { contacts, cursor, has_more } = await listContactsHandler(
       supabase,
       {
         organization_id: orgId ?? "",
-        actor: { type: "user", id: user.id },
+        actor: { type: "user", id: authUser.id },
         requestId,
         idioma: authUser?.idioma,
       },

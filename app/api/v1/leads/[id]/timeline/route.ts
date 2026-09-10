@@ -58,15 +58,11 @@ export async function GET(req: NextRequest, ctx: RouteCtx): Promise<Response> {
   const { id: leadId } = await ctx.params;
 
   const supabase = await createClient();
-  const {
-    data: { user },
-    error: authErr,
-  } = await supabase.auth.getUser();
-  if (authErr || !user) {
+  const authUser = await loadAuthUser();
+  if (!authUser) {
     return fail("unauthenticated", "Auth required.", 401, { requestId });
   }
-  const authUser = await loadAuthUser();
-  const t = (texto: string) => traduzir(texto, authUser?.idioma ?? "pt-BR");
+  const t = (texto: string) => traduzir(texto, authUser.idioma);
 
   const url = new URL(req.url);
   const types = url.searchParams.getAll("type").filter(Boolean);

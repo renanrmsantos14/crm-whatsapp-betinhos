@@ -154,37 +154,44 @@ export async function loadAuthUser(): Promise<AuthUser | null> {
   // ⚠️ O erro é capturado de propósito: aqui `data: null` é AMBÍGUO — significa tanto
   // "não é platform admin" (RLS filtrou, estado normal) quanto "a query falhou".
   // Sem separar os dois, um banco instável rebaixa silenciosamente um super-admin.
-  const { data: paRow, error: paErro } = await supabase
-    .from("platform_admins")
-    .select("user_id, revoked_at")
-    .eq("user_id", user.id)
-    .is("revoked_at", null)
-    .maybeSingle();
-
-  // Org memberships (only active = not revoked, accepted)
-  // ⚠️ `ORDER BY` NÃO É ENFEITE AQUI: esta lista decide QUAL ORGANIZAÇÃO FICA
-  // ATIVA para quem não tem o cookie `active_org` — `resolveActiveOrg` pega
-  // `organizations[0]`. Sem ordenação, "a primeira" é o que o Postgres devolver,
-  // e isso não é estável por especificação: muda com plano de execução, com a
-  // ordem física das linhas e com qualquer reescrita delas.
-  //
-  // O efeito para quem administra DUAS empresas na mesma instalação: entrar sem
-  // cookie (primeiro acesso, sessão nova, cookie expirado) podia cair numa ou na
-  // outra sem critério nenhum — e o produto não dava sinal de que escolheu.
-  //
-  // `accepted_at` primeiro porque a organização mais ANTIGA é a que a pessoa
-  // reconhece como "a minha"; `organization_id` como desempate, para o resultado
-  // ser determinístico mesmo quando as duas entraram no mesmo instante (é o caso
-  // de quem foi convidado para várias no mesmo lote).
-  const { data: rawMemberships, error: membErro } = await supabase
-    .from("user_organizations")
-    .select(
-      "organization_id, role, interface_settings, accepted_at, organizations(display_name, locale)",
-    )
-    .eq("user_id", user.id)
-    .is("revoked_at", null)
-    .order("accepted_at", { ascending: true, nullsFirst: true })
-    .order("organization_id", { ascending: true });
+  // Estas três leituras não dependem umas das outras. Mantemos a ordem e o
+  // escopo de cada consulta, mas não fazemos o usuário pagar uma viagem inteira
+  // por vez para descobrir plataforma, organizações e acompanhamento.
+  const [paResult, membershipsResult, support] = await Promise.all([
+    supabase
+      .from("platform_admins")
+      .select("user_id, revoked_at")
+      .eq("user_id", user.id)
+      .is("revoked_at", null)
+      .maybeSingle(),
+    // Org memberships (only active = not revoked, accepted)
+    // ⚠️ `ORDER BY` NÃO É ENFEITE AQUI: esta lista decide QUAL ORGANIZAÇÃO FICA
+    // ATIVA para quem não tem o cookie `active_org` — `resolveActiveOrg` pega
+    // `organizations[0]`. Sem ordenação, "a primeira" é o que o Postgres devolver,
+    // e isso não é estável por especificação: muda com plano de execução, com a
+    // ordem física das linhas e com qualquer reescrita delas.
+    //
+    // O efeito para quem administra DUAS empresas na mesma instalação: entrar sem
+    // cookie (primeiro acesso, sessão nova, cookie expirado) podia cair numa ou na
+    // outra sem critério nenhum — e o produto não dava sinal de que escolheu.
+    //
+    // `accepted_at` primeiro porque a organização mais ANTIGA é a que a pessoa
+    // reconhece como "a minha"; `organization_id` como desempate, para o resultado
+    // ser determinístico mesmo quando as duas entraram no mesmo instante (é o caso
+    // de quem foi convidado para várias no mesmo lote).
+    supabase
+      .from("user_organizations")
+      .select(
+        "organization_id, role, interface_settings, accepted_at, organizations(display_name, locale)",
+      )
+      .eq("user_id", user.id)
+      .is("revoked_at", null)
+      .order("accepted_at", { ascending: true, nullsFirst: true })
+      .order("organization_id", { ascending: true }),
+    readSupportContext(supabase),
+  ]);
+  const { data: paRow, error: paErro } = paResult;
+  const { data: rawMemberships, error: membErro } = membershipsResult;
 
   /**
    * FALHA ALTO, não baixo.
@@ -231,7 +238,6 @@ export async function loadAuthUser(): Promise<AuthUser | null> {
     };
   });
 
-  const support = await readSupportContext(supabase);
   const fullName = (user.user_metadata?.full_name as string | undefined) ?? null;
   const avatarUrl = (user.user_metadata?.avatar_url as string | undefined) ?? null;
   const locale = (user.user_metadata?.locale as string | undefined) ?? null;

@@ -46,16 +46,13 @@ describe("tabToFilter — o que cada aba significa", () => {
     //
     // `comandosDaFila` responde a pergunta certa e continua cobrindo a conversa
     // escalada (ela é `aguardando`, por causa do silêncio, não do status).
-    expect(tabToFilter("unassigned")).toEqual({ comando: ["aguardando"] });
+    expect(tabToFilter("unassigned")).toEqual({ fila: true });
   });
 
-  it("numa org SEM automático, a Fila também traz o que ninguém está atendendo", () => {
-    // O controle do caso acima. Sem ele, a Fila de uma instalação recém-instalada
-    // — que ainda não publicou agente — nasceria VAZIA com clientes esperando,
-    // que é o pior estado possível na primeira impressão.
-    expect(tabToFilter("unassigned", false)).toEqual({
-      comando: ["aguardando", "automatico"],
-    });
+  it("a intenção da Fila é estável; o servidor resolve o automático", () => {
+    // O controle contra a regressão de velocidade: o resultado de uma leitura
+    // org-wide não pode trocar a queryKey no meio da primeira renderização.
+    expect(tabToFilter("unassigned")).toEqual({ fila: true });
   });
 
   it("a aba do automático pergunta a régua do MOTOR, não `ai_handling`", () => {

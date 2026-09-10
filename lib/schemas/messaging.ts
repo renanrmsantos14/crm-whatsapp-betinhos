@@ -303,6 +303,12 @@ export const listConversationsQuerySchema = z.object({
       return validos;
     }),
   /**
+   * Fila operacional: o servidor resolve se a organização tem automático e
+   * aplica `comandosDaFila` sem fazer a tela trocar de query no meio da carga.
+   * Não é um segundo vocabulário de comando; é apenas a intenção da aba.
+   */
+  fila: z.boolean().optional(),
+  /**
    * Esconde as conversas terminais (fechada/arquivada).
    *
    * Existe porque "Minhas" filtrava SÓ por dono e `Fechar` não solta o dono

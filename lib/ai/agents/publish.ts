@@ -53,20 +53,20 @@ export async function publishAgentVersion(
   // DeepSeek descobrem o catálogo por credencial (`models_available`), então
   // materializamos o modelo validado no catálogo global antes do RPC. Sem isso
   // a tela aceitava o modelo, mas a função SQL recusava com model_not_found.
-  if (version.credential_id !== null) {
+  if (version.credential_id !== null || version.provider === "deepseek") {
     const { data: credential, error: credentialError } = await admin
       .from("ai_provider_credentials")
       .select("provider, models_available")
       .eq("id", version.credential_id)
       .eq("organization_id", params.orgId)
       .maybeSingle();
-    if (credentialError) {
+    if (credentialError && version.credential_id !== null) {
       return { ok: false, code: "internal_error", message: credentialError.message };
     }
     const discovered = (credential?.models_available ?? []).filter(
       (modelId): modelId is string => typeof modelId === "string" && modelId.length > 0,
     );
-    if (discovered.includes(version.model)) {
+    if (version.provider === "deepseek" && (version.credential_id === null || discovered.includes(version.model))) {
       const modelId = version.model;
       const { error: catalogError } = await admin.from("ai_models").upsert(
         {

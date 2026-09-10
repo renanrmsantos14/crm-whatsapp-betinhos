@@ -83,7 +83,7 @@ describe("o ícone carrega para quem NÃO entrou", () => {
     const icone = fs.readFileSync(path.join(RAIZ, "app/icon.tsx"), "utf8");
     expect(icone).toMatch(/export const dynamic\s*=\s*"force-dynamic"/);
     // E a marca tem de vir do resolvedor, não de literal.
-    expect(icone).toMatch(/marcaDaSaida\(null\)/);
+    expect(icone).toMatch(/marcaDaSaidaPublica\(\)/);
   });
 
   it("o layout declara o ícone — é o que mata o pedido a /favicon.ico", () => {

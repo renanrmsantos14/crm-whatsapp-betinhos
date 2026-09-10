@@ -14,6 +14,7 @@ import { cleanup, render, screen } from "@testing-library/react";
 
 import { Sidebar } from "@/components/shell/Sidebar";
 import type { ActiveOrg, AuthUser } from "@/lib/auth/types";
+import { INTERFACE_COMPLETA } from "@/lib/navigation/interface";
 
 const authRef: { user: Pick<AuthUser, "is_platform_admin">; activeOrg: ActiveOrg | null } = {
   user: { is_platform_admin: false },
@@ -41,7 +42,12 @@ vi.mock("@/components/shell/VersionFooter", () => ({
 
 function comoPapel(role: ActiveOrg["role"]) {
   authRef.user = { is_platform_admin: false };
-  authRef.activeOrg = { orgId: "org-1", name: "Org", role };
+  authRef.activeOrg = {
+    orgId: "org-1",
+    name: "Org",
+    role,
+    interface_settings: INTERFACE_COMPLETA,
+  };
 }
 
 afterEach(cleanup);

@@ -3352,21 +3352,44 @@ async function executarTurnoDoAgente(
     const currentStage: LeadStage = leadState?.stage ?? 'new';
     let stageSuggestion: LeadStage | null = null;
     let stageHintBlock = '';
-    if (deps.knobs.stageClassifier !== undefined) {
-      stageSuggestion = await classifyStage(
-        pool,
-        deps.llmCfg,
-        { tenantId, leadId: leadId || null, jobId: job?.id },
-        {
-          context: effectiveContext,
-          currentStage,
-          ...argsAux(deps.knobs.stageClassifier.model),
-        },
-        { registry: deps.registry, log: runLog },
-      );
-      if (stageSuggestion !== null) {
-        stageHintBlock = renderStageHint(stageSuggestion, currentStage);
-      }
+    const sandbox = preview?.kind === 'sandbox';
+    const stageClassifierEnabled = !sandbox && deps.knobs.stageClassifier !== undefined;
+    const jailbreakEnabled = !sandbox && camadaLigada(camadas.jailbreak, deps.knobs.jailbreak !== undefined);
+    const stageClassifierPromise = stageClassifierEnabled
+      ? classifyStage(
+          pool,
+          deps.llmCfg,
+          { tenantId, leadId: leadId || null, jobId: job?.id },
+          {
+            context: effectiveContext,
+            currentStage,
+            ...argsAux(deps.knobs.stageClassifier?.model),
+          },
+          { registry: deps.registry, log: runLog },
+        )
+      : Promise.resolve(null);
+    const jailbreakPromise = jailbreakEnabled
+      ? classifyJailbreak(
+          pool,
+          deps.llmCfg,
+          { tenantId, leadId: leadId || null, jobId: job?.id },
+          {
+            message: skillSignal,
+            // Knob ausente + organização ligando = roda com o modelo padrão dela,
+            // que é a convenção já usada pelo stageClassifier.
+            ...argsAux(deps.knobs.jailbreak?.model),
+          },
+          { registry: deps.registry, log: runLog },
+        )
+      : Promise.resolve(null);
+
+    const [stageResult, jailbreakVerdict] = await Promise.all([
+      stageClassifierPromise,
+      jailbreakPromise,
+    ]);
+    stageSuggestion = stageResult;
+    if (stageSuggestion !== null) {
+      stageHintBlock = renderStageHint(stageSuggestion, currentStage);
     }
 
     // F4-04: classifier ADVISÓRIO anti-jailbreak sobre a mensagem INBOUND do lead (o
@@ -3374,19 +3397,8 @@ async function executarTurnoDoAgente(
     // checado nele). NÃO veta o inbound — só FLAGRA o turno no trace; flag/level não são PII
     // (a mensagem/reason nunca vão a log). A correlação com promessa fora de tabela escala no fim.
     let jailbreakLevel: JailbreakLevel = 'none';
-    if (camadaLigada(camadas.jailbreak, deps.knobs.jailbreak !== undefined)) {
-      const verdict = await classifyJailbreak(
-        pool,
-        deps.llmCfg,
-        { tenantId, leadId: leadId || null, jobId: job?.id },
-        {
-          message: skillSignal,
-          // Knob ausente + organização ligando = roda com o modelo padrão dela,
-          // que é a convenção já usada pelo stageClassifier.
-          ...argsAux(deps.knobs.jailbreak?.model),
-        },
-        { registry: deps.registry, log: runLog },
-      );
+    const verdict = jailbreakVerdict;
+    if (verdict !== null) {
       jailbreakLevel = verdict.level;
       if (verdict.flag) {
         // trace do turno: só flag/level (não PII) — a mensagem e o reason nunca são logados.

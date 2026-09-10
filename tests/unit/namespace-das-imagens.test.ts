@@ -279,6 +279,7 @@ describe("catraca: ninguém mais repete o namespace", () => {
       ".git",
       "node_modules",
       ".next",
+      "graphify-out",
       "docs",
       "coverage",
       "playwright-report",

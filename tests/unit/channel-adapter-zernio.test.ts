@@ -20,6 +20,14 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const fetchMock = vi.fn();
 vi.stubGlobal("fetch", fetchMock);
 
+// O adapter valida o IP resolvido antes de buscar a mídia. O teste não deve
+// depender do DNS da máquina (que pode devolver uma resposta privada, ou
+// mudar entre execuções), então o controle positivo usa um IP público fixo.
+vi.mock("node:dns/promises", () => {
+  const lookup = vi.fn(async () => [{ address: "93.184.216.34", family: 4 }]);
+  return { lookup, default: { lookup } };
+});
+
 vi.mock("@/lib/supabase/admin", () => ({ createAdminClient: () => ({}) }));
 
 const credsRef: { current: unknown } = { current: null };

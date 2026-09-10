@@ -36,6 +36,7 @@ export type ProviderRegistry = Record<
 const ANTHROPIC_ENDPOINT = 'https://api.anthropic.com';
 const OPENAI_ENDPOINT = 'https://api.openai.com';
 const GOOGLE_ENDPOINT = 'https://generativelanguage.googleapis.com';
+const DEEPSEEK_ENDPOINT = 'https://api.deepseek.com';
 /**
  * A OpenRouter fala a API da OpenAI, então o provider `@ai-sdk/openai` conversa
  * com ela sem dependência nova — e os ids dela já vêm no formato
@@ -96,6 +97,10 @@ export function createDefaultRegistry(opts?: { allowedHosts?: string[] }): Provi
       createOpenAI({ apiKey, fetch: contain(OPENAI_ENDPOINT) })(modelId),
     google: (apiKey, modelId) =>
       createGoogleGenerativeAI({ apiKey, fetch: contain(GOOGLE_ENDPOINT) })(modelId),
+    deepseek: (apiKey, modelId, baseUrl) => {
+      const endpoint = baseUrl ?? DEEPSEEK_ENDPOINT;
+      return createOpenAI({ apiKey, baseURL: endpoint, fetch: contain(endpoint) })(modelId);
+    },
     /**
      * O `baseUrl` do painel é honrado aqui, e a allowlist do egress passa a ser
      * a DELE — não a da OpenRouter mais um furo. Apontar para um gateway

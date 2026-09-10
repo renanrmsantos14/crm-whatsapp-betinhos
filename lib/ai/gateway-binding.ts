@@ -287,6 +287,8 @@ function instanciar(
       return createGoogleGenerativeAI({ apiKey })(modelId);
     case "openrouter":
       return createOpenAI({ apiKey, baseURL: baseUrl ?? OPENROUTER_BASE_URL })(modelId);
+    case "deepseek":
+      return createOpenAI({ apiKey, baseURL: baseUrl ?? "https://api.deepseek.com" })(modelId);
     default:
       return null;
   }

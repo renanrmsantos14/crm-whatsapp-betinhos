@@ -155,7 +155,7 @@ function buildSentinelRegex(keywords: string[]): RegExp | null {
  * lá não existe faria o ensaio passar e a mensagem real falhar.
  */
 export function chaveDePlataforma(provider: string): string | null {
-  const nome = { anthropic: "ANTHROPIC_API_KEY", openai: "OPENAI_API_KEY", openrouter: "OPENROUTER_API_KEY" }[
+  const nome = { anthropic: "ANTHROPIC_API_KEY", openai: "OPENAI_API_KEY", openrouter: "OPENROUTER_API_KEY", deepseek: "DEEPSEEK_API_KEY" }[
     provider
   ];
   if (!nome) return null;
@@ -182,6 +182,8 @@ export function buildModel(provider: string, apiKey: string, modelId: string): L
         baseURL: OPENROUTER_ENDPOINT,
         headers: cabecalhosDeAtribuicaoOpenRouter(),
       })(modelId);
+    case "deepseek":
+      return createOpenAI({ apiKey, baseURL: "https://api.deepseek.com" })(modelId);
     default:
       throw new Error(`unsupported_provider: ${provider}`);
   }

@@ -62,7 +62,7 @@ function registryQueFalha(erro: unknown) {
         throw erro;
       },
     }) as never;
-  return { anthropic: fabrica, openai: fabrica, google: fabrica, openrouter: fabrica };
+  return { anthropic: fabrica, openai: fabrica, google: fabrica, openrouter: fabrica, deepseek: fabrica };
 }
 
 /**

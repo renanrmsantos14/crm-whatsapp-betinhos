@@ -171,6 +171,7 @@ const schema = z.object({
   // `cabecalhosDeAtribuicaoOpenRouter()`, em edge/llm/providers.ts.
   OPENROUTER_APP_URL: z.string().optional().default(""),
   OPENROUTER_APP_TITLE: z.string().optional().default(""),
+  DEEPSEEK_API_KEY: z.string().optional().default(""),
   VERCEL_AI_GATEWAY_URL: z.string().optional().default(""),
   ANTHROPIC_API_KEY: z.string().optional().default(""),
   OPENAI_API_KEY: z.string().optional().default(""),
@@ -369,7 +370,8 @@ export const env = parsed.data;
 
 // Soft warning for env-gated AI keys (worker degrades gracefully but operators
 // should know when the bot is silent for config reasons).
-// `OPENROUTER_API_KEY` entra na condição porque `isAiGatewayConfigured()`
+// `OPENROUTER_API_KEY` e `DEEPSEEK_API_KEY` entram na condição porque
+// `isAiGatewayConfigured()`
 // (lib/ai/gateway.ts) e `resolveLanguageModel` a tratam como configuração
 // VÁLIDA. Sem ela aqui, a instalação que escolhe OpenRouter — a primeira opção
 // que o `install.sh` oferece — gritava no primeiro boot que a IA ia ficar muda,
@@ -377,9 +379,14 @@ export const env = parsed.data;
 // cadastrava uma chave da Anthropic que não precisava, só para calar o aviso.
 // O texto era verdadeiro enquanto a Anthropic era a única chave que o
 // instalador pedia; o menu novo o tornou falso.
-if (!env.AI_GATEWAY_API_KEY && !env.ANTHROPIC_API_KEY && !env.OPENROUTER_API_KEY) {
+if (
+  !env.AI_GATEWAY_API_KEY &&
+  !env.ANTHROPIC_API_KEY &&
+  !env.OPENROUTER_API_KEY &&
+  !env.DEEPSEEK_API_KEY
+) {
   console.warn(
-    "[env] Nenhuma chave de IA configurada (AI_GATEWAY_API_KEY, ANTHROPIC_API_KEY ou OPENROUTER_API_KEY) — " +
+    "[env] Nenhuma chave de IA configurada (AI_GATEWAY_API_KEY, ANTHROPIC_API_KEY, OPENROUTER_API_KEY ou DEEPSEEK_API_KEY) — " +
       "o agente vai pular toda resposta com reason='ai_gateway_key_missing'.",
   );
 }

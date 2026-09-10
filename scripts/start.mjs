@@ -4,6 +4,8 @@ import { resolve } from "node:path";
 
 const serverPath = resolve(process.cwd(), ".next", "standalone", "server.js");
 const standaloneDir = resolve(process.cwd(), ".next", "standalone");
+const envPath = resolve(process.cwd(), ".env");
+const envLocalPath = resolve(process.cwd(), ".env.local");
 
 if (!existsSync(serverPath)) {
   console.error(
@@ -23,11 +25,19 @@ for (const [source, target] of runtimeAssets) {
   if (existsSync(source)) cpSync(source, target, { recursive: true, force: true });
 }
 
-const child = spawn(process.execPath, [serverPath], {
-  cwd: standaloneDir,
-  env: process.env,
-  stdio: "inherit",
-});
+const child = spawn(
+  process.execPath,
+  [
+    `--env-file-if-exists=${envPath}`,
+    `--env-file-if-exists=${envLocalPath}`,
+    serverPath,
+  ],
+  {
+    cwd: standaloneDir,
+    env: process.env,
+    stdio: "inherit",
+  },
+);
 
 child.on("exit", (code, signal) => {
   if (signal) process.kill(process.pid, signal);

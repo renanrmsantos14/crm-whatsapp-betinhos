@@ -169,6 +169,22 @@ export async function validateOpenRouterKey(apiKey: string): Promise<ValidationR
   }
 }
 
+/** DeepSeek expõe `/models` no formato OpenAI e exige Bearer. */
+export async function validateDeepSeekKey(apiKey: string): Promise<ValidationResult> {
+  try {
+    const res = await timedFetch("https://api.deepseek.com/models", {
+      method: "GET",
+      headers: { Authorization: `Bearer ${apiKey}` },
+    });
+    if (res.status === 401 || res.status === 403) return { ok: false, error: "auth_failed_401" };
+    if (!res.ok) return { ok: false, error: `provider_status_${res.status}` };
+    const json = (await res.json()) as { data?: { id?: string }[] };
+    return { ok: true, models: (json.data ?? []).map((m) => m.id ?? "").filter(Boolean) };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.name : "network_error" };
+  }
+}
+
 export function validateProviderKey(
   provider: Provider,
   apiKey: string,
@@ -182,6 +198,8 @@ export function validateProviderKey(
       return validateGoogleKey(apiKey);
     case "openrouter":
       return validateOpenRouterKey(apiKey);
+    case "deepseek":
+      return validateDeepSeekKey(apiKey);
     default: {
       // Sem `never` aqui: `Provider` agora é derivado de PROVEDORES, e a lista
       // cresce sem que este arquivo saiba. Provedor novo cadastrado antes de

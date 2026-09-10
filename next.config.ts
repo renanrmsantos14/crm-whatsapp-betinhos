@@ -1,4 +1,3 @@
-import { withSentryConfig } from "@sentry/nextjs";
 import type { NextConfig } from "next";
 
 /** Performance budget (EPIC-12 §S-12.05):
@@ -86,7 +85,7 @@ const nextConfig: NextConfig = {
   },
 };
 
-export default withSentryConfig(nextConfig, {
+const sentryOptions = {
   // For all available options, see:
   // https://www.npmjs.com/package/@sentry/webpack-plugin#options
 
@@ -122,4 +121,18 @@ export default withSentryConfig(nextConfig, {
       removeDebugLogging: true,
     },
   },
-});
+};
+
+/**
+ * O plugin do Sentry só é necessário no build de produção. Importá-lo durante
+ * `next dev` carregava o plugin de sourcemaps e o wrapper de webpack antes de
+ * o servidor abrir, apesar de o desenvolvimento não enviar sourcemaps. O
+ * import dinâmico deixa o caminho local leve e preserva a configuração
+ * completa quando a imagem de produção é construída.
+ */
+export default async function config(): Promise<NextConfig> {
+  if (process.env.NODE_ENV === "development") return nextConfig;
+
+  const { withSentryConfig } = await import("@sentry/nextjs/config");
+  return withSentryConfig(nextConfig, sentryOptions);
+}

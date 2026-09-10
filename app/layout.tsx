@@ -19,6 +19,7 @@ import {
   type MarcaResolvida,
 } from "@/lib/branding/resolve";
 import { env } from "@/lib/env";
+import { isPublicPath } from "@/lib/auth/public-paths";
 import { logger } from "@/lib/logger";
 import { ThemeProvider } from "@/lib/theme";
 import { Providers } from "./providers";
@@ -55,7 +56,13 @@ async function marcaResolvida(): Promise<{
   readonly linha: LinhaDaMarca | null;
   readonly marca: MarcaResolvida;
 }> {
-  const linha = await marcaDaInstalacao();
+  // Login, cadastro e confirmação de e-mail não precisam consultar o banco
+  // para descobrir a marca. Além de ser desnecessário, esse acesso remoto no
+  // layout global segurava o primeiro HTML quando o Supabase estava lento ou
+  // temporariamente indisponível. Nessas rotas o `.env` já é a camada de
+  // fallback válida; telas autenticadas continuam lendo `platform_branding`.
+  const pathname = (await headers()).get("x-pathname");
+  const linha = pathname && isPublicPath(pathname) ? null : await marcaDaInstalacao();
   const marca = resolverMarca(
     [camadaDaInstalacao(linha), camadaDoAmbiente(env)],
     REGUA_DO_PRODUTO,

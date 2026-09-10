@@ -11,16 +11,20 @@ import {
 const COOKIE_NAME = "sb-deskcomm-auth";
 
 export async function proxy(request: NextRequest) {
-  const response = NextResponse.next({ request: { headers: request.headers } });
-
   // Inject X-Request-Id for downstream correlation (audit log, error wrappers).
   const requestId = request.headers.get("x-request-id") ?? crypto.randomUUID();
-  response.headers.set("x-request-id", requestId);
 
   const { pathname, search } = request.nextUrl;
-  // Expose pathname to Server Components via header (used by onboarding layout).
+  // Expose pathname to Server Components via the forwarded request header.
+  // Mutating `request.headers` in place does not forward the value upstream in
+  // Next.js 16; `NextResponse.next({ request: { headers } })` is the supported
+  // path. The onboarding layout and the root branding resolver depend on it.
+  const requestHeaders = new Headers(request.headers);
+  requestHeaders.set("x-pathname", pathname);
+  const response = NextResponse.next({ request: { headers: requestHeaders } });
+
+  response.headers.set("x-request-id", requestId);
   response.headers.set("x-pathname", pathname);
-  request.headers.set("x-pathname", pathname);
 
   // EPIC-11: in dev we route by path (`/admin/*`); in prod the
   // `admin.deskcomm.com` sub-domain is mapped via Vercel rewrites to the same

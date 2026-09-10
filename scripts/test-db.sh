@@ -30,7 +30,10 @@ run_vitest() {
   if command -v node.exe >/dev/null 2>&1; then
     local root_windows
     root_windows="$(wslpath -w "$ROOT" 2>/dev/null || printf '%s' "$ROOT")"
-    node.exe "$root_windows/node_modules/vitest/vitest.mjs" "$@"
+    # A interoperação WSL não repassa variáveis exportadas para processos PE.
+    # Defina-as no ambiente Windows via cmd.exe antes de iniciar o Vitest.
+    local args="$*"
+    cmd.exe /d /c "set TEST_DB_CONTAINER=$TEST_DB_CONTAINER&&set TEST_DB_TEMPLATE=$TEST_DB_TEMPLATE&&set TEST_DB_PORT=$TEST_DB_PORT&&cd /d $root_windows&&node_modules\\.bin\\vitest.cmd $args"
     return
   fi
   echo "FATAL: não encontrei node nem node.exe para executar o Vitest" >&2
@@ -396,8 +399,10 @@ echo "==> invariantes: vitest (tests/invariants) — banco novo por ARQUIVO, ord
 # `--sequence.shuffle.files`: com o isolamento por arquivo a ordem deixa de ser
 # variável escondida, e sortear é o que impede a próxima colisão de fixture de
 # ficar dormente até alguém renomear um arquivo.
-TEST_DB_CONTAINER="$CONTAINER" TEST_DB_TEMPLATE="$TEMPLATE" TEST_DB_PORT="$PORT" \
-  run_vitest run --config vitest.db.config.ts --sequence.shuffle.files=true "$@"
+export TEST_DB_CONTAINER="$CONTAINER"
+export TEST_DB_TEMPLATE="$TEMPLATE"
+export TEST_DB_PORT="$PORT"
+run_vitest run --config vitest.db.config.ts --sequence.shuffle.files=true "$@"
 
 # A RECUSA. Vem depois do vitest e ANTES da palavra "verde", porque o que se
 # recusa aqui é o próprio resultado — inclusive um resultado que passou.

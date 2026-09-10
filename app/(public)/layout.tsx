@@ -1,5 +1,4 @@
-import { marcaDaSaida } from "@/lib/branding/saida";
-import { createClient } from "@/lib/supabase/server";
+import { marcaDaSaidaPublica } from "@/lib/branding/saida";
 import { IdiomaProvider } from "@/lib/i18n/IdiomaProvider";
 
 /**
@@ -14,14 +13,12 @@ import { IdiomaProvider } from "@/lib/i18n/IdiomaProvider";
  * senha, cadastro de MFA), que é justamente onde o cliente do revendedor
  * aparece sozinho e sem contexto.
  *
- * ── Por que `marcaDaSaida(null)` ──────────────────────────────────────────────
+ * ── Por que `marcaDaSaidaPublica()` ──────────────────────────────────────────
  *
- * Aqui não existe organização resolvida: `null` é a declaração disso, e a pilha
- * resultante é a mesma do layout raiz (banco acima, `.env` embaixo). Montar a
- * pilha à mão nesta tela faria a fachada anunciar uma precedência que o resto do
- * produto não usa. E `marcaDaSaida` NUNCA lança (ver o cabeçalho dela): uma cor
- * ou um logo mal gravados não podem derrubar a única tela por onde se entra para
- * corrigi-los.
+ * Aqui não existe organização resolvida e a tela não pode depender de rede:
+ * `marcaDaSaidaPublica` usa a camada `.env`, que é a rede de segurança para
+ * entrar e corrigir a instalação. As telas autenticadas e os e-mails continuam
+ * usando a pilha completa por `marcaDaSaida`. O resolvedor nunca lança.
  *
  * O NOME continua saindo de `branding()` dentro de cada página — não é descuido,
  * está medido em `tests/e2e/icone-da-marca.spec.ts:64-77`: aquela spec cruza duas
@@ -30,17 +27,10 @@ import { IdiomaProvider } from "@/lib/i18n/IdiomaProvider";
  * deixaria a spec verde medindo nada.
  */
 export default async function PublicLayout({ children }: { children: React.ReactNode }) {
-  const marca = await marcaDaSaida(null);
-  // A maioria destas telas roda ANTES do login (não há usuário nenhum), mas
-  // duas — `/login/mfa` e, em parte, `/login/recovery` — rodam com uma sessão
-  // parcial já criada (primeiro fator verificado, segundo pendente). Onde há
-  // sessão, o idioma salvo no perfil vale; sem ela, `IdiomaProvider` já cai no
-  // padrão pt-BR sozinho (ver o cabeçalho do provider) — nunca lança.
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  const locale = (user?.user_metadata?.locale as string | undefined) ?? null;
+  const marca = marcaDaSaidaPublica();
+  // A casca pública precisa renderizar sem rede ou sessão. O provider usa
+  // pt-BR quando não há locale disponível; isso não bloqueia login/cadastro.
+  const locale = null;
 
   return (
     <IdiomaProvider locale={locale}>

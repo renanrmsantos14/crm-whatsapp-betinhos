@@ -22,6 +22,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { melhorFrenteSobre } from "@/lib/branding/contraste";
+import { DEFAULT_APP_NAME } from "@/lib/branding";
 import { stop } from "@/lib/branding/rampa";
 import { REGUA_DO_PRODUTO } from "@/lib/branding/regua-do-produto";
 
@@ -126,6 +127,16 @@ describe("marcaDaSaida — o piso", () => {
 });
 
 describe("marcaDaSaida — as duas classes", () => {
+  it("rota pública usa a camada local sem consultar a instalação remota", async () => {
+    const { marcaDaSaidaPublica } = await carregar();
+    linhaDaInstalacao = { app_name: "Marca remota" };
+
+    const marca = marcaDaSaidaPublica();
+
+    expect(marca.origens.nome).toBe("padrao");
+    expect(marca.nome).not.toBe("Marca remota");
+  });
+
   it("classe B (sem organização) resolve a marca da INSTALAÇÃO", async () => {
     const { marcaDaSaida } = await carregar();
     linhaDaInstalacao = { app_name: "Vendas Turbo", accent_hex: "#2563eb" };
@@ -191,7 +202,7 @@ describe("marcaDaSaida — NUNCA LANÇA", () => {
     clienteExplode = true;
 
     const marca = await marcaDaSaida("11111111-1111-4111-8111-111111111111");
-    expect(marca.nome).toBe("DeskcommCRM");
+    expect(marca.nome).toBe(DEFAULT_APP_NAME);
     expect(marca.accent).toBe(ACCENT_DO_PRODUTO);
     expect(marca.accentFg).toBe(melhorFrenteSobre(ACCENT_DO_PRODUTO));
   });
@@ -214,7 +225,7 @@ describe("marcaDaSaida — NUNCA LANÇA", () => {
     for (const settings of ["texto", 42, [], { branding: "isto era um objeto" }, null]) {
       respostaDaOrganizacao = { data: { settings }, error: null };
       const marca = await marcaDaSaida("11111111-1111-4111-8111-111111111111");
-      expect(marca.nome).toBe("DeskcommCRM");
+      expect(marca.nome).toBe(DEFAULT_APP_NAME);
     }
   });
 

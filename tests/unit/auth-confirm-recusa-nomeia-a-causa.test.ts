@@ -8,18 +8,13 @@
  *
  *  - `token_hash` (nossos templates): o link realmente expirou ou já foi usado.
  *    Pedir outro resolve.
- *  - `code` (template PADRÃO do Supabase): o link chega por PKCE, o verificador
- *    vive num cookie `sameSite: "strict"` (`lib/supabase/server.ts:35`, aplicado
- *    a TODO cookie do cliente — `@supabase/ssr/cookies.js:227,232`), e clique
- *    vindo de webmail é navegação cross-site: o cookie não viaja. Pedir outro
- *    link NÃO resolve — cada novo link falha igual. O conserto é configurar os
- *    templates (`hostgator-setup-kit/marca-emails.sh`).
+ *  - `code` (template PADRÃO do Supabase): o link chega por PKCE, e o
+ *    verificador temporário usa `SameSite=Lax` para atravessar a navegação
+ *    cross-site. Se falhar, o link realmente expirou, foi usado ou voltou sem
+ *    o cookie do navegador.
  *
- * O sintoma enganoso mandava o operador caçar TTL e relógio do servidor. Este
- * teste prende a distinção nos DOIS sentidos: sem o segundo caso, alguém
- * "simplifica" os dois ramos de volta para uma mensagem só; sem o primeiro,
- * alguém troca tudo por `template_padrao` e passa a acusar de configuração o
- * link que de fato expirou.
+ * O audit ainda registra o formato dos dois links para a triagem. A tela usa
+ * `link_invalido` nos dois casos, porque pedir outro link é a ação válida.
  */
 import fs from "node:fs";
 import path from "node:path";
@@ -70,9 +65,16 @@ describe("/auth/confirm nomeia a causa da recusa", () => {
     return expect(destino("?token_hash=abc&type=recovery")).resolves.toBe("?error=link_invalido");
   });
 
-  it("code que falhou vira `template_padrao` — pedir outro NÃO resolve", async () => {
+  it("code que falhou vira `link_invalido`", async () => {
     supabaseQue(RECUSA);
-    expect(await destino("?code=pkce_abc")).toBe("?error=template_padrao");
+    expect(await destino("?code=pkce_abc")).toBe("?error=link_invalido");
+  });
+
+  it("deixa Lax somente no verificador PKCE e mantém a sessão Strict", () => {
+    const fonte = fs.readFileSync(path.join(process.cwd(), "lib/supabase/server.ts"), "utf8");
+    expect(fonte).toContain('name.endsWith("-code-verifier")');
+    expect(fonte).toContain('sameSite: "lax" as const');
+    expect(fonte).toContain('sameSite: "strict"');
   });
 
   it("link sem token nenhum continua `link_invalido` e não chama o Supabase", async () => {
@@ -103,16 +105,12 @@ describe("/auth/confirm nomeia a causa da recusa", () => {
     );
   });
 
-  it("a tela do login tem texto para o código novo — senão a recusa fica muda", () => {
-    // Sem este caso, `?error=template_padrao` chegaria a uma página que só
-    // conhece `link_invalido` e `provisionamento`: nenhum aviso renderiza, e o
-    // usuário vê a tela de login limpa, como se nada tivesse acontecido.
-    // É o modo de falha mais silencioso possível — pior que a mensagem errada.
+  it("a tela do login tem texto para link inválido", () => {
     const fonte = fs.readFileSync(
       path.join(process.cwd(), "app/(public)/login/page.tsx"),
       "utf8",
     );
-    expect(fonte).toContain('error === "template_padrao"');
-    expect(fonte).toContain("marca-emails.sh");
+    expect(fonte).toContain('error === "link_invalido"');
+    expect(fonte).toContain("Link inválido ou expirado");
   });
 });

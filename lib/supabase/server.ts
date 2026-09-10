@@ -21,7 +21,14 @@ export async function createClient() {
       setAll(cookiesToSet: { name: string; value: string; options: CookieOptions }[]) {
         try {
           cookiesToSet.forEach(({ name, value, options }) => {
-            cookieStore.set(name, value, options);
+            // O verificador PKCE é criado antes do clique no e-mail. O retorno
+            // do provedor é uma navegação cross-site de topo, então esse cookie
+            // temporário precisa viajar com SameSite=Lax. A sessão continua
+            // Strict abaixo; só o sufixo efêmero recebe a exceção.
+            const cookieOptions = name.endsWith("-code-verifier")
+              ? { ...options, sameSite: "lax" as const }
+              : options;
+            cookieStore.set(name, value, cookieOptions);
           });
         } catch {
           // setAll pode ser chamado de Server Component; nesse caso, ignoramos.

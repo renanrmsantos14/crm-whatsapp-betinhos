@@ -3,13 +3,11 @@
  *
  * ── E na fachada de acesso, que tem DOM e mesmo assim vem aqui ────────────────
  *
- * `app/(public)/layout.tsx` (login, cadastro, recuperação, MFA) também chama
- * `marcaDaSaida(null)`, e isso não contradiz o nome deste módulo: o que aquela
- * casca precisa é exatamente o que ele entrega — UM nome e UM logo, da pilha
- * instalação → `.env`, de um resolvedor que nunca lança. Cor ela não usa: quem
- * pinta aquelas telas é o `<style id="marca-instalacao">` do layout raiz. O que
- * NÃO pode acontecer é a fachada montar a própria pilha e anunciar uma
- * precedência que o resto do produto não usa.
+ * `app/(public)/layout.tsx` (login, cadastro, recuperação, MFA) usa
+ * `marcaDaSaidaPublica()`: UM nome e UM logo da camada `.env`, sem bloquear a
+ * porta de entrada por uma consulta remota. Saídas autenticadas e transacionais
+ * usam `marcaDaSaida()` com a precedência completa. Cor a fachada não usa:
+ * quem pinta aquelas telas é o `<style id="marca-instalacao">` do layout raiz.
  *
  * ── Por que este seam existe ─────────────────────────────────────────────────
  *
@@ -53,7 +51,12 @@ import { marcaDaInstalacao } from "./instalacao";
 import { resolverMarcaDaOrganizacao } from "./organizacao";
 import { stop } from "./rampa";
 import { REGUA_DO_PRODUTO } from "./regua-do-produto";
-import { camadaDaInstalacao, camadaDoAmbiente, resolverMarca } from "./resolve";
+import {
+  camadaDaInstalacao,
+  camadaDoAmbiente,
+  resolverMarca,
+  type MarcaResolvida,
+} from "./resolve";
 
 export type MarcaDeSaida = {
   readonly nome: string;
@@ -123,6 +126,22 @@ function padraoDoProduto(): MarcaDeSaida {
   };
 }
 
+function formatoDeSaida(marca: MarcaResolvida): MarcaDeSaida {
+  const derivada = marca.cor?.derivada ?? null;
+  const accent = derivada?.claro.accent ?? ACCENT_DO_PRODUTO;
+
+  return {
+    nome: marca.name,
+    logoUrl: marca.logoUrl,
+    accent,
+    accentFg: derivada?.claro.accentFg ?? melhorFrenteSobre(accent),
+    origens: {
+      nome: marca.origens.nome,
+      cor: derivada ? marca.origens.cor : "padrao",
+    },
+  };
+}
+
 /**
  * Avisos já registrados neste processo — mesmo desenho de `instalacao.ts:223`.
  * Sem isto, um banco fora do ar encheria o log com uma linha por e-mail.
@@ -187,37 +206,26 @@ export async function marcaDaSaida(organizationId: string | null): Promise<Marca
         ? resolverMarca([camadaDaInstalacao(linha), camadaDoAmbiente(env)], REGUA_DO_PRODUTO)
         : resolverMarcaDaOrganizacao(await settingsDaOrganizacao(organizationId), linha, env);
 
-    // `claro`, sempre — ver o cabeçalho. `derivada` é `null` quando a semente
-    // não pinta (cor acromática, papel só de identidade, hex recusado): aí o
-    // accent do produto é a resposta certa, e não a semente crua, que nesses
-    // casos é justamente a cor que o derivador se recusou a usar.
-    const derivada = marca.cor?.derivada ?? null;
-    const accent = derivada?.claro.accent ?? ACCENT_DO_PRODUTO;
-
-    return {
-      nome: marca.name,
-      logoUrl: marca.logoUrl,
-      accent,
-      // Nunca `#ffffff` fixo: `melhorFrenteSobre` (`contraste.ts:79`) já
-      // decide preto ou branco pelo contraste real. Uma marca amarela colada
-      // pelo revendedor produziria texto branco ilegível no botão — e é
-      // exatamente a marca que se cola sem avisar ninguém.
-      accentFg: derivada?.claro.accentFg ?? melhorFrenteSobre(accent),
-      origens: {
-        nome: marca.origens.nome,
-        // Sem derivação a cor EXIBIDA é a do produto, mesmo que alguma camada
-        // tenha declarado uma semente. Reportar a camada aqui faria o
-        // diagnóstico dizer "a cor veio do banco" enquanto o botão está verde
-        // do produto.
-        cor: derivada ? marca.origens.cor : "padrao",
-      },
-    };
+    return formatoDeSaida(marca);
   } catch (erro) {
     avisarUmaVez("resolucao|excecao", "marca de saída: resolução falhou; vale o padrão do produto", {
       detalhe: erro instanceof Error ? erro.message : String(erro),
     });
     return padraoDoProduto();
   }
+}
+
+/**
+ * Marca para páginas anteriores ao login.
+ *
+ * Essas telas precisam renderizar mesmo sem rede ou sessão. O `.env` é a rede
+ * de segurança da instalação; não bloquear o primeiro HTML com consulta remota
+ * é deliberado. O app autenticado e as saídas transacionais continuam usando
+ * `marcaDaSaida()` e a precedência completa do banco.
+ */
+export function marcaDaSaidaPublica(): MarcaDeSaida {
+  const marca = resolverMarca([camadaDoAmbiente(env)], REGUA_DO_PRODUTO);
+  return formatoDeSaida(marca);
 }
 
 /**

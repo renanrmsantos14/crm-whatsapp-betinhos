@@ -1,20 +1,15 @@
 import Link from "next/link";
 
 import { ForgotPasswordForm } from "@/components/auth/ForgotPasswordForm";
-import { createClient } from "@/lib/supabase/server";
 import { normalizarIdioma } from "@/lib/i18n/idiomas";
 import { traduzir } from "@/lib/i18n/dicionario";
 
 export const metadata = { title: "Recuperar senha" };
 
 export default async function ForgotPasswordPage() {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  const idioma = normalizarIdioma(
-    (user?.user_metadata?.locale as string | undefined) ?? null,
-  );
+  // Recuperação é uma porta pública; não dependa da sessão para renderizar o
+  // formulário que justamente ajuda quem não consegue entrar.
+  const idioma = normalizarIdioma(null);
   const t = (texto: string) => traduzir(texto, idioma);
 
   return (

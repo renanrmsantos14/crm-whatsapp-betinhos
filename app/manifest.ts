@@ -1,9 +1,9 @@
 import type { MetadataRoute } from "next";
 
-import { marcaDaSaida } from "@/lib/branding/saida";
+import { marcaDaSaidaPublica } from "@/lib/branding/saida";
 
 export default async function manifest(): Promise<MetadataRoute.Manifest> {
-  const marca = await marcaDaSaida(null);
+  const marca = marcaDaSaidaPublica();
   return {
     name: marca.nome,
     short_name: marca.nome,

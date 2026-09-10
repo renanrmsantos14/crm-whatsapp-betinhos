@@ -1,7 +1,7 @@
 import { ImageResponse } from "next/og";
 
 import { letraDoIcone } from "@/lib/branding/icone";
-import { marcaDaSaida } from "@/lib/branding/saida";
+import { marcaDaSaidaPublica } from "@/lib/branding/saida";
 
 /**
  * O ícone da aba, DESENHADO em runtime com a marca da instalação.
@@ -29,8 +29,8 @@ import { marcaDaSaida } from "@/lib/branding/saida";
  * (`supabase/baseline.sql:11832-11848`). Buscá-la aqui seria uma requisição de
  * saída disparada pelo `<head>` de TODA página, com a URL vinda de um campo que
  * o operador digita — SSRF com gatilho em cada page load. Derivar o ícone de
- * cor + inicial não toca a rede: o accent vem do mesmo resolvedor que pinta os
- * e-mails (`marcaDaSaida`) e a fonte (`Geist-Regular.ttf`) vem embutida no
+ * cor + inicial não toca a rede: o accent vem do resolvedor rápido das rotas
+ * públicas e a fonte (`Geist-Regular.ttf`) vem embutida no
  * `@vercel/og` que o Next já traz — nenhuma dependência nova, nenhum download.
  *
  * ─── `force-dynamic` não é zelo ─────────────────────────────────────────────
@@ -64,7 +64,7 @@ export const size = { width: 64, height: 64 };
 export const contentType = "image/png";
 
 export default async function Icon() {
-  const marca = await marcaDaSaida(null);
+  const marca = marcaDaSaidaPublica();
   const letra = letraDoIcone(marca.nome);
 
   return new ImageResponse(

@@ -3,7 +3,6 @@ import Link from "next/link";
 import { SignupForm } from "@/components/auth/SignupForm";
 import { branding } from "@/lib/branding";
 import { verifyInviteToken } from "@/lib/auth/invite-token";
-import { createClient } from "@/lib/supabase/server";
 import { normalizarIdioma } from "@/lib/i18n/idiomas";
 import { traduzir } from "@/lib/i18n/dicionario";
 
@@ -28,13 +27,9 @@ export default async function SignupPage({
   const convite = invite && payload ? { token: invite, email: payload.email } : undefined;
   const conviteExpirado = Boolean(invite) && !payload;
 
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  const idioma = normalizarIdioma(
-    (user?.user_metadata?.locale as string | undefined) ?? null,
-  );
+  // O cadastro é público; não dependa de sessão nem de consulta remota para
+  // montar o formulário.
+  const idioma = normalizarIdioma(null);
   const t = (texto: string) => traduzir(texto, idioma);
 
   return (

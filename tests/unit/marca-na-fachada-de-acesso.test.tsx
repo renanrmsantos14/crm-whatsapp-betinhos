@@ -27,17 +27,8 @@ import type { MarcaDeSaida } from "@/lib/branding/saida";
  * arquivo.
  */
 
-const marcaDaSaida = vi.hoisted(() => vi.fn());
-vi.mock("@/lib/branding/saida", () => ({ marcaDaSaida }));
-// A casca passou a resolver o idioma da interface (ver `IdiomaProvider` no
-// próprio layout) e por isso chama `createClient()`, que lê cookies — algo que
-// só existe dentro de uma requisição real. Fora do login quase nunca há
-// sessão, e o mock reflete exatamente isso: nenhum usuário.
-vi.mock("@/lib/supabase/server", () => ({
-  createClient: vi.fn(async () => ({
-    auth: { getUser: vi.fn(async () => ({ data: { user: null } })) },
-  })),
-}));
+const marcaDaSaidaPublica = vi.hoisted(() => vi.fn());
+vi.mock("@/lib/branding/saida", () => ({ marcaDaSaidaPublica }));
 
 const MARCA: MarcaDeSaida = {
   nome: "Vendas Turbo",
@@ -48,7 +39,7 @@ const MARCA: MarcaDeSaida = {
 };
 
 async function fachada(marca: MarcaDeSaida): Promise<string> {
-  marcaDaSaida.mockResolvedValue(marca);
+  marcaDaSaidaPublica.mockReturnValue(marca);
   const { default: PublicLayout } = await import("@/app/(public)/layout");
   return renderToStaticMarkup(await PublicLayout({ children: <p>formulário</p> }));
 }
@@ -56,7 +47,7 @@ async function fachada(marca: MarcaDeSaida): Promise<string> {
 describe("a casca das telas de acesso", () => {
   beforeEach(() => {
     vi.resetModules();
-    marcaDaSaida.mockReset();
+    marcaDaSaidaPublica.mockReset();
   });
 
   it("com logo configurado, a fachada o desenha", async () => {
@@ -83,9 +74,8 @@ describe("a casca das telas de acesso", () => {
   it("a fachada resolve a marca SEM organização — é o que `null` declara ali", async () => {
     await fachada(MARCA);
 
-    // `marcaDaSaida(orgId)` com um id monta a pilha da organização. Na tela de
-    // login não existe organização resolvida (ninguém entrou), e passar
-    // qualquer outra coisa aqui seria inventar um tenant para pintar a fachada.
-    expect(marcaDaSaida).toHaveBeenCalledWith(null);
+    // A fachada usa o resolvedor público, sem organização nem consulta remota.
+    // A pilha completa com `organizationId` fica reservada às telas autenticadas.
+    expect(marcaDaSaidaPublica).toHaveBeenCalledWith();
   });
 });

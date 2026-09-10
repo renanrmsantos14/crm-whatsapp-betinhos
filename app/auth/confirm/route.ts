@@ -30,23 +30,13 @@ import { env } from "@/lib/env";
  *   signUp.ts anexam `?type=` no redirectTo/emailRedirectTo — é o único jeito
  *   desse dado sobreviver ao hop pelo GoTrue nesse formato.
  *
- *   ⚠️ O formato `code` NÃO FECHA nesta instalação, e o motivo é estrutural.
- *   `@supabase/ssr` força `flowType: "pkce"` (createServerClient.js:33) e grava
- *   o verificador num cookie (`<storageKey>-code-verifier`, cookies.js:18) com
- *   as MESMAS `cookieOptions` da sessão (cookies.js:227,232) — isto é, com o
- *   `sameSite: "strict"` de `lib/supabase/server.ts:35`. Clique de link vindo
- *   de webmail é navegação CROSS-SITE: o navegador não manda cookie Strict, o
- *   verificador não chega, e `exchangeCodeForSession` falha. O formato
- *   `token_hash` não depende de cookie nenhum.
- *
- *   (O que NÃO está medido: um cliente de e-mail nativo abre o link sem
- *   iniciador, e nesse caso o navegador PODE mandar o cookie Strict. Por isso a
- *   mensagem da tela aponta a configuração como conserto, e não promete que
- *   "abrir noutro lugar" funciona.)
- *
- *   É por isso que a recusa dos dois ramos não pode ter a mesma mensagem:
- *   "link inválido ou expirado" manda o operador caçar TTL e relógio quando o
- *   problema é que os templates nunca foram configurados.
+ *   O formato `code` usa PKCE. O cookie de verificação
+ *   (`<storageKey>-code-verifier`) recebe `SameSite=Lax` em
+ *   `lib/supabase/server.ts`, enquanto a sessão permanece `Strict`: o retorno
+ *   do provedor é uma navegação cross-site de topo e precisa carregar somente
+ *   esse estado efêmero. Assim o template padrão funciona sem SMTP ou template
+ *   customizado. Se o cookie não existir mais (outro navegador, expiração ou
+ *   link já usado), a falha é realmente `link_invalido`.
  *
  * - type=signup  → provisiona o tenant (org + membership admin) e entra no
  *                  onboarding. Provisionamento é idempotente (link clicado 2x).
@@ -93,11 +83,7 @@ export async function GET(request: NextRequest) {
       metadata: { type, formato: viaTokenHash ? "token_hash" : "code", reason: error?.message ?? "no_user" },
       requestId,
     });
-    // Dois códigos porque são duas causas e dois consertos. `link_invalido`
-    // continua sendo "peça outro link". `template_padrao` diz o que a tela
-    // antes escondia: o link veio do modelo padrão, pedir outro não adianta, e
-    // o conserto é configurar os templates (hostgator-setup-kit/marca-emails.sh).
-    return redirectTo(viaTokenHash ? "/login?error=link_invalido" : "/login?error=template_padrao");
+    return redirectTo("/login?error=link_invalido");
   }
 
   if (type === "recovery") {

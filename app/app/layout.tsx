@@ -104,17 +104,32 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     }
   }
 
-  // A conexão caiu? A consulta mora no seam (`lib/channels/health`), não aqui:
-  // tela que monta o select de `channel_sessions` à mão foi o que deixou três
-  // seletores oferecendo canal arquivado, e o invariante `canais-selecionaveis`
-  // existe por causa disso. De quebra, o filtro de estados fica LITERALMENTE o
-  // mesmo que decide o aviso da Central — duas listas divergiriam com o tempo.
-  const conexoesCaidas: ConexaoCaida[] = activeOrg
-    ? await listarConexoesCaidas(createAdminClient(), activeOrg.orgId)
-    : [];
-
-  // Read sidebar collapsed state SSR to avoid flash.
-  const store = await cookies();
+  // Estas quatro leituras não dependem umas das outras. Antes eram aguardadas
+  // em sequência e o primeiro HTML autenticado pagava quatro viagens ao banco
+  // mesmo quando nenhuma delas mudava a decisão de roteamento. Mantemos os
+  // redirects acima antes do lote: uma organização não iniciada/suspensa não
+  // dispara consultas de shell que nunca serão renderizadas.
+  const [conexoesCaidas, store, enrolled, needsMfaGate] = await Promise.all([
+    // A conexão caiu? A consulta mora no seam (`lib/channels/health`), não aqui:
+    // tela que monta o select de `channel_sessions` à mão foi o que deixou três
+    // seletores oferecendo canal arquivado, e o invariante `canais-selecionaveis`
+    // existe por causa disso. De quebra, o filtro de estados fica LITERALMENTE o
+    // mesmo que decide o aviso da Central — duas listas divergiriam com o tempo.
+    activeOrg
+      ? listarConexoesCaidas(createAdminClient(), activeOrg.orgId)
+      : Promise.resolve<ConexaoCaida[]>([]),
+    // Read sidebar collapsed state SSR to avoid flash.
+    cookies(),
+    isMfaEnrolled(),
+    // A decisão deixou de ser uma constante de papel: ela lê a política de quem
+    // pode exigir (a plataforma e a empresa). Ver `lib/auth/politica-mfa.ts`.
+    requiresMfa(
+      activeOrg?.role,
+      user.is_platform_admin,
+      user.id,
+      activeOrg?.orgId,
+    ),
+  ]);
   const collapsed = store.get("sidebar_collapsed")?.value === "1";
 
   const impersonating = user.support ? {
@@ -122,15 +137,6 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     expiresAt: user.support.expires_at, accessMode: user.support.access_mode,
   } : null;
 
-  const enrolled = await isMfaEnrolled();
-  // A decisão deixou de ser uma constante de papel: ela lê a política de quem
-  // pode exigir (a plataforma e a empresa). Ver `lib/auth/politica-mfa.ts`.
-  const needsMfaGate = await requiresMfa(
-    activeOrg?.role,
-    user.is_platform_admin,
-    user.id,
-    activeOrg?.orgId,
-  );
   const shell = <AppShell sidebarCollapsed={collapsed}>{children}</AppShell>;
 
   return (

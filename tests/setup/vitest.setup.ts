@@ -1,4 +1,5 @@
 import { readFileSync } from "node:fs";
+import { File as NodeFile } from "node:buffer";
 import { resolve } from "node:path";
 
 /**
@@ -70,6 +71,13 @@ for (const [chave, valor] of Object.entries(PLACEHOLDERS)) {
 }
 
 import "@testing-library/jest-dom/vitest";
+
+// O parser multipart do undici identifica `File` pelo realm do Node. O jsdom
+// instala outro construtor global e, em `NextRequest.formData()`, o arquivo
+// manualmente montado passa a falhar antes de chegar à rota. Mantemos o DOM
+// do jsdom para os testes de UI, mas usamos o File nativo do Node para que os
+// testes de route handler reproduzam o runtime real.
+globalThis.File = NodeFile as unknown as typeof File;
 
 // jsdom não implementa ResizeObserver; Radix (ex.: Switch) usa em layout effects.
 if (typeof globalThis.ResizeObserver === "undefined") {

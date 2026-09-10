@@ -192,7 +192,7 @@ echo -n "7a3f9b2c1d4e5f..." | shasum -a 512 | awk '{print $1}'
 ```
 
 > ⚠️ **Erro #1 de quem clona o projeto:** confundir plaintext com hash. Memoriza:
-> - O **container WAHA** recebe o **HASH** → vai em `WAHA_API_KEY_SHA512`.
+> - O **container WAHA** recebe `sha512:<HASH>`; o compose monta esse valor a partir de `WAHA_API_KEY_SHA512`.
 > - O **app Next.js** envia o **PLAINTEXT** no header `X-Api-Key` → vai em `WAHA_API_KEY`.
 
 ### Passo 2 — gerar o HMAC secret pro webhook
@@ -251,7 +251,7 @@ WAHA_WEBHOOK_BASE_URL=https://abc-123-456.ngrok-free.app
 ### Passo 5 — subir o WAHA
 
 ```bash
-docker compose up -d
+docker compose --env-file .env.local up -d waha
 ```
 
 Confira em <http://localhost:3030/dashboard/> que o WAHA está respondendo (painel do WAHA). Pra criar sessão e escanear QR, veja a doc oficial: <https://waha.devlikeapro.com/docs/overview/quick-start/>.
@@ -485,7 +485,7 @@ Você esqueceu de preencher `NEXT_PUBLIC_SUPABASE_URL` ou tem espaço/aspa errad
 A `anon key` ou `service role key` foi colada errada (cortou no meio). JWTs do Supabase são longos (~200 chars). Volte no dashboard e use o botão **Copy** em vez de selecionar manualmente.
 
 ### WAHA retorna 401 `Unauthorized`
-Provável: você botou o **hash** em `WAHA_API_KEY` em vez do **plaintext**. Confira: a app envia o que tá no `.env.local` no header — o container WAHA é quem tem o hash (em `WAHA_API_KEY_SHA512`). Refaça o passo 1 do WAHA.
+O app envia `WAHA_API_KEY` (plaintext) no header `X-Api-Key`; o container precisa receber `sha512:<hash>` — o compose monta isso com `WAHA_API_KEY_SHA512`. Refaça o passo 1, confirme as duas variáveis no `.env.local` e suba o WAHA com `docker compose --env-file .env.local up -d waha`.
 
 ### Webhook do WAHA não chega
 - O ngrok está rodando? (`ngrok http 3000`)

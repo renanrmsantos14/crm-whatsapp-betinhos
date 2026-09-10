@@ -34,4 +34,12 @@ describe("autenticação do WAHA nos composes", () => {
     const client = readFileSync("lib/waha/client.ts", "utf8");
     expect(client).toContain('headers: { "X-Api-Key": this.apiKey');
   });
+
+  it("os composes usam o nome canônico da URL de webhook", () => {
+    for (const arquivo of COMPOSES) {
+      const compose = readFileSync(arquivo, "utf8");
+      expect(compose).toContain("WAHA_WEBHOOK_BASE_URL");
+      expect(compose).not.toContain("WAHA_HOOK_BASE_URL");
+    }
+  });
 });

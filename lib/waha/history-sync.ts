@@ -82,7 +82,6 @@ export async function sincronizarHistoricoWaha(
           {
             id: session.id,
             organization_id: session.organization_id,
-            status: session.status,
             is_warmup_complete: null,
             warmup_started_at: null,
           },

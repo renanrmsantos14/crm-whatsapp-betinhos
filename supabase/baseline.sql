@@ -1012,11 +1012,11 @@ CREATE TABLE IF NOT EXISTS "public"."ai_agent_versions" (
     "tool_ids" "text"[] DEFAULT '{}'::"text"[] NOT NULL,
     "trigger_config" "jsonb" DEFAULT "jsonb_build_object"('events', "jsonb_build_array"('message'), 'filters', "jsonb_build_object"('ignore_groups', true, 'ignore_self', true, 'keyword_regex', NULL::"unknown", 'business_hours', NULL::"unknown"), 'concurrency', 'one_per_conversation') NOT NULL,
     "channel_session_id" "uuid" NOT NULL,
-    "max_steps" integer DEFAULT 10 NOT NULL,
+    "max_steps" integer DEFAULT 8 NOT NULL,
     "token_budget" integer DEFAULT 50000 NOT NULL,
     "cost_budget_cents" integer DEFAULT 50 NOT NULL,
-    "history_message_window" integer DEFAULT 20 NOT NULL,
-    "history_token_window" integer DEFAULT 8000 NOT NULL,
+    "history_message_window" integer DEFAULT 10 NOT NULL,
+    "history_token_window" integer DEFAULT 4000 NOT NULL,
     "handoff_keywords" "text"[] DEFAULT ARRAY['falar com humano'::"text", 'atendente'::"text", 'pessoa real'::"text"] NOT NULL,
     "handoff_tool_enabled" boolean DEFAULT true NOT NULL,
     "status" "text" DEFAULT 'draft'::"text" NOT NULL,
@@ -23247,6 +23247,14 @@ revoke all on function public.fn_reserve_channel_connection(uuid,uuid,text,text,
 grant execute on function public.fn_reserve_channel_connection(uuid,uuid,text,text,boolean) to authenticated;
 
 notify pgrst,'reload schema';
+
+-- 0235 — defaults de agente com foco em resposta curta.
+-- Aditivo e idempotente: altera apenas o default para novos registros; versões
+-- já publicadas preservam os valores escolhidos pelo operador.
+alter table public.ai_agent_versions
+  alter column max_steps set default 8,
+  alter column history_message_window set default 10,
+  alter column history_token_window set default 4000;
 
 -- ---- VARREDURA anon: função nova nasce exposta em quem ATUALIZA (migration 0116) ----
 --

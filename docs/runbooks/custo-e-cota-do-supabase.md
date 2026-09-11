@@ -37,12 +37,15 @@ linha `agent-engine pronto` do log.
 |---|---|---|
 | `QUEUE_POLL_INTERVAL_MS` | `2000` | **Teto de espera.** Com a fila vazia, é quanto o worker dorme entre uma consulta e a próxima. Com job agendado, ele acorda no vencimento e este valor só limita a soneca. |
 | `QUEUE_CLAIM_RETRY_INTERVAL_MS` | `250` | Ritmo do *“havia trabalho e eu não peguei”* — todas as vagas de `QUEUE_MAX_CONCURRENCY` ocupadas, ou outro turno rodando para o mesmo contato. |
+| `CRM_DRAIN_IDLE_INTERVAL_MS` | `2000` | Intervalo máximo para o worker perceber um inbound quando o drain está ocioso. Valores maiores aumentam a latência antes do debounce de 3 s. |
+| `INBOUND_DEBOUNCE_MS` | `3000` | Janela que junta mensagens próximas do mesmo contato em um único turno. Menor reduz a espera percebida; maior reduz chamadas em rajadas. |
+| `AGENT_FAST_MODE` | `false` | Quando `true`, limita o turno a 10 mensagens/4.000 tokens, até 6 steps, e remove o classificador de estágio consultivo. Não desliga envio nem guardrails. |
 
 **Não passe `QUEUE_POLL_INTERVAL_MS` de 10000.** A conexão ociosa do pool expira
 em 10 s; acima disso cada rodada volta a pagar TCP+TLS+startup, e o intervalo
 maior passa a gastar **mais** do que economiza. O worker avisa no boot se você
 cruzar essa linha. Ele também não deve chegar perto de `INBOUND_DEBOUNCE_MS`
-(8000), senão o laço dorme através da janela de coalescência.
+(3000), senão o laço dorme através da janela de coalescência.
 
 Depois de editar o `.env`:
 

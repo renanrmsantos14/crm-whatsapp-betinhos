@@ -4,7 +4,7 @@
  * ─── O defeito que este arquivo existe para impedir ─────────────────────────
  *
  * A tela do agente oferece "Tamanho máximo desse histórico" e grava
- * `ai_agent_versions.history_token_window` (default 8.000). O turno carregava a
+ * `ai_agent_versions.history_token_window` (default 4.000). O turno carregava a
  * coluna, montava `historyTokenWindow` na config… e passava ao contexto o valor
  * de `LEAD_CONTEXT_MAX_TOKENS` — uma env com default 1.000 que sequer aparece no
  * `.env.example`. Quem configurava 8.000 recebia 1.000, e nada dizia isso.

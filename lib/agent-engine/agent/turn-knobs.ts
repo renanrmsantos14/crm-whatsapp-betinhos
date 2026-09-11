@@ -7,6 +7,7 @@ export function turnKnobsFromEnv(env: Env): InboundTurnKnobs {
     maxContextTokens: env.LEAD_CONTEXT_MAX_TOKENS,
     notesIndexMaxTokens: env.LEAD_NOTES_INDEX_MAX_TOKENS,
     maxSteps: env.AGENT_MAX_STEPS,
+    fastMode: env.AGENT_FAST_MODE,
     maxSendsPerTurn: env.MAX_SENDS_PER_TURN,
     queuedRetryDelayMs: env.SEND_QUEUED_RETRY_MS,
     breaker: {

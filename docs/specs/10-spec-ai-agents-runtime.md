@@ -155,11 +155,11 @@ create table public.ai_agent_versions (
   channel_session_id uuid not null references public.channel_sessions(id) on delete restrict,
 
   -- Limites operacionais
-  max_steps integer not null default 10 check (max_steps between 1 and 25),
+  max_steps integer not null default 8 check (max_steps between 1 and 25),
   token_budget integer not null default 50000 check (token_budget between 1000 and 500000),
   cost_budget_cents integer not null default 50 check (cost_budget_cents between 1 and 10000),
-  history_message_window integer not null default 20,
-  history_token_window integer not null default 8000,
+  history_message_window integer not null default 10,
+  history_token_window integer not null default 4000,
 
   -- Handoff
   handoff_keywords text[] not null default array['falar com humano', 'atendente', 'pessoa real'],

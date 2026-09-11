@@ -289,3 +289,4 @@ To re-apply on a fresh Supabase project, replay the migrations in version order 
 | `20260910010000` | `0232_padrao_de_interface_betinhos` | Novas memberships e tenants começam no perfil simplificado de operação; escolhas explícitas de interface são preservadas. |
 | `20260910123500` | `0233_nome_sessao_waha_compativel` | Reserva WAHA respeita o limite de 54 caracteres e cura retries FAILED cujo remoto nunca foi criado. Forward-fix de 0230. |
 | `20260910140000` | `0234_historico_waha_sem_automacao` | Recuperação incremental do histórico WAHA com marcador no evento para impedir automações e IA sobre mensagens antigas; baseline idempotente. |
+| `20260911090000` | `0235_resposta_ia_mais_rapida` | Defaults de novos agentes com 8 steps, 10 mensagens e 4.000 tokens de histórico; versões existentes preservadas. Perfil rápido da instalação documentado no `.env.example`. |

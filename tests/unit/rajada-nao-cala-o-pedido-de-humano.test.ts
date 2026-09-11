@@ -10,7 +10,7 @@ import type { LeadContext } from "@/lib/agent-engine/edge/crm/get-lead-context";
 /**
  * A RAJADA — o dano colateral do pin, e a separação que o desfaz.
  *
- * O drain coalesce rajada: com `INBOUND_DEBOUNCE_MS` (default 8000, em
+ * O drain coalesce rajada: com `INBOUND_DEBOUNCE_MS` (default 3000, em
  * `lib/agent-engine/env.ts`), a segunda mensagem do cliente NÃO ganha job próprio
  * — ela entra de carona no job da primeira (`edge/crm/drain.ts`, bloco
  * "Coalescência"), e o único job que existe carrega o id da PRIMEIRA.

@@ -171,6 +171,7 @@ import { camadaLigada, lerCamadasDaOrg } from '../guardrails/camadas-da-org';
 import { fusoDaOrganizacao } from './fuso-da-org';
 import { renderAgora } from '@/lib/tempo/agora';
 import { decidirElegibilidadeDaConversa } from '@/lib/ai/elegibilidade/consulta-pg';
+import { limitesDoTurno } from './performance-profile';
 
 /**
  * Superfície ESTÁTICA das tools do agente (description + inputSchema) — parte do
@@ -816,6 +817,8 @@ export interface InboundTurnKnobs {
   notesIndexMaxTokens: number;
   /** teto de steps do loop de tools por run (AGENT_MAX_STEPS) — circuit breaker fino é F2-15 */
   maxSteps: number;
+  /** Perfil rápido opt-in: reduz contexto/steps e remove hint auxiliar de estágio. */
+  fastMode?: boolean;
   /**
    * Teto de mensagens FÍSICAS enviadas ao lead neste turno (MAX_SENDS_PER_TURN),
    * send_message + send_template somados, bolhas incluídas. Ausente = usa
@@ -957,7 +960,7 @@ export async function latestCheckpoint(
  * `latestCheckpoint` é a pergunta certa para ABRIR um turno e a errada para
  * PROCESSAR um: entre o fim do turno N e o claim do job do Operador N cabe o turno
  * N+1 inteiro. A fila ordena por `(priority, run_after)`, o job do Operador nasce
- * com `run_after = now()` e o inbound com `now() + INBOUND_DEBOUNCE_MS` (8s) —
+ * com `run_after = now()` e o inbound com `now() + INBOUND_DEBOUNCE_MS` (3s) —
  * então uma mensagem que chega enquanto o turno corrente fecha é servida ANTES, e o
  * Operador N acordaria lendo a declaração N+1. O efeito é a mesma promessa
  * executada duas vezes e um aviso aberto duas vezes para uma promessa só.
@@ -1278,7 +1281,7 @@ export function claimsCurrentInboundIsEmpty(candidate: string, currentInbound: s
  *
  * ## Por que não basta "a última inbound"
  *
- * O drain COALESCE rajada: com `INBOUND_DEBOUNCE_MS` (default 8000), a segunda
+ * O drain COALESCE rajada: com `INBOUND_DEBOUNCE_MS` (default 3000), a segunda
  * mensagem do cliente não ganha job próprio — ela "entra de carona" no job da
  * primeira (`edge/crm/drain.ts`, "Coalescência"). O turno responde à mensagem que
  * o job aponta, e isso está certo; mas quem só olhasse essa mensagem não OUVIRIA
@@ -1802,7 +1805,19 @@ async function executarTurnoDoAgente(
     }
   }
   // Knobs por-turno: a versão publicada vence o env; sem ela, env (main.ts).
-  const maxSteps = agentConfig?.maxSteps ?? deps.knobs.maxSteps;
+  const fastMode = deps.knobs.fastMode === true;
+  // O perfil rápido é uma escolha explícita da instalação. Ele limita versões
+  // já publicadas sem reescrever o cadastro do agente; desligado, a versão
+  // publicada continua sendo a fonte de verdade.
+  const limites = limitesDoTurno(
+    {
+      maxSteps: agentConfig?.maxSteps ?? deps.knobs.maxSteps,
+      historyLimit: agentConfig?.historyMessageWindow ?? contextKnobs.historyLimit,
+      maxContextTokens: agentConfig?.historyTokenWindow ?? contextKnobs.maxTokens,
+    },
+    fastMode,
+  );
+  const maxSteps = limites.maxSteps;
   // Fallback de modelo das chamadas AUXILIARES (classificadores/compaction/promessa):
   // knob de env → modelo do agente PUBLICADO na tela → organizations.settings.llm.
   // Sem isso, self-host que configurou tudo pela tela (que não preenche default_model)
@@ -1819,7 +1834,7 @@ async function executarTurnoDoAgente(
    * env, que é o defeito.
    *
    * A tela oferece "Tamanho máximo desse histórico" por agente e grava
-   * `history_token_window` (default 8.000). O turno lia `historyMessageWindow`
+   * `history_token_window` (default 4.000). O turno lia `historyMessageWindow`
    * dali e `maxTokens` de `LEAD_CONTEXT_MAX_TOKENS`, uma env com default 1.000
    * que sequer aparece no `.env.example`: quem configurava 8.000 na tela recebia
    * 1.000, sem nada dizer que o número não valia. Metade da versão publicada era
@@ -1831,13 +1846,10 @@ async function executarTurnoDoAgente(
    * conversa. O ramo sem versão publicada segue com os knobs da instalação, que
    * é o único caso em que ela é a fonte legítima.
    */
-  const turnContextKnobs =
-    agentConfig !== null
-      ? {
-          historyLimit: agentConfig.historyMessageWindow,
-          maxTokens: agentConfig.historyTokenWindow,
-        }
-      : contextKnobs;
+  const turnContextKnobs = {
+    historyLimit: limites.historyLimit,
+    maxTokens: limites.maxContextTokens,
+  };
 
   // Ritual de abertura: playbook por ponteiro + checkpoint + contexto curado.
   // Com agente publicado, o system_prompt DELE é a camada tenant (platform de
@@ -3353,7 +3365,9 @@ async function executarTurnoDoAgente(
     let stageSuggestion: LeadStage | null = null;
     let stageHintBlock = '';
     const sandbox = preview?.kind === 'sandbox';
-    const stageClassifierEnabled = !sandbox && deps.knobs.stageClassifier !== undefined;
+    // O estágio é um hint consultivo. No perfil rápido, removê-lo economiza uma
+    // chamada de LLM inteira sem retirar resposta, envio ou guardrails.
+    const stageClassifierEnabled = !sandbox && !fastMode && deps.knobs.stageClassifier !== undefined;
     const jailbreakEnabled = !sandbox && camadaLigada(camadas.jailbreak, deps.knobs.jailbreak !== undefined);
     const stageClassifierPromise = stageClassifierEnabled
       ? classifyStage(

@@ -100,11 +100,11 @@ const versionShapeSchema = z
       ),
     trigger_config: triggerConfigSchema.optional(),
     channel_session_id: UUID,
-    max_steps: z.number().int().min(1).max(25).default(10),
+    max_steps: z.number().int().min(1).max(25).default(8),
     token_budget: z.number().int().min(1000).max(500000).default(50000),
     cost_budget_cents: z.number().int().min(1).max(10000).default(50),
-    history_message_window: z.number().int().min(0).max(200).default(20),
-    history_token_window: z.number().int().min(0).max(50000).default(8000),
+    history_message_window: z.number().int().min(0).max(200).default(10),
+    history_token_window: z.number().int().min(0).max(50000).default(4000),
     handoff_keywords: z
       .array(z.string().trim().min(1).max(60))
       .max(20)

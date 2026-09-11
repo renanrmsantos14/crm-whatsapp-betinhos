@@ -25,6 +25,9 @@ describe("loadEnv — vazio é ausente (contrato BYOK do README)", () => {
     expect(env.ANTHROPIC_API_KEY).toBeUndefined();
     expect(env.AGENT_MAX_STEPS).toBe(8); // default, não NaN de coerce('')
     expect(env.AGENT_DISPATCH_CONSUMER).toBe("engine");
+    expect(env.CRM_DRAIN_IDLE_INTERVAL_MS).toBe(2_000);
+    expect(env.INBOUND_DEBOUNCE_MS).toBe(3_000);
+    expect(env.AGENT_FAST_MODE).toBe(false);
   });
 
   it("obrigatória VAZIA = erro claro nomeando a var (fail-fast preservado)", () => {
@@ -36,6 +39,11 @@ describe("loadEnv — vazio é ausente (contrato BYOK do README)", () => {
   it("obrigatória ausente = mesmo erro claro", () => {
     const { SUPABASE_DB_URL: _omit, ...rest } = REQUIRED;
     expect(() => loadEnv(rest)).toThrowError(/SUPABASE_DB_URL/);
+  });
+
+  it("perfil rápido só liga quando o operador escolhe explicitamente", () => {
+    const env = loadEnv({ ...REQUIRED, AGENT_FAST_MODE: "true" });
+    expect(env.AGENT_FAST_MODE).toBe(true);
   });
 });
 
